@@ -1,0 +1,3 @@
+[submodule "pokemon-game-data"]
+	path = pokemon-game-data
+	url = https://github.com/pret/pokered.git
