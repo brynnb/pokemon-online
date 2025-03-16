@@ -397,6 +397,10 @@ class NPCMovementManager {
     const state = this.npcStates.get(npc.id);
     if (!state || !this.wss) return;
 
+    // Determine if the sprite should be flipped horizontally
+    // For RIGHT direction, we need to flip the sprite
+    const flipX = state.direction === DIRECTIONS.RIGHT;
+
     // Create the update message
     const updateMessage = {
       type: "npcUpdate",
@@ -410,6 +414,7 @@ class NPCMovementManager {
         direction: state.direction,
         frame: state.frame,
         isMoving: state.isMoving,
+        flipX: flipX,
       },
     };
 
