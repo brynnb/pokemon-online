@@ -1,4 +1,3 @@
-const sqlite3 = require("sqlite3").verbose();
 const WebSocket = require("ws");
 
 // Constants for movement directions (based on the original Game Boy constants)
@@ -57,294 +56,246 @@ class NPCMovementManager {
         this.startMovementLoop();
         this.startAnimationLoop();
       } else {
-        console.log(
-          "No walking NPCs found in the database. Checking if we can create one..."
-        );
-
-        // Try to create a walking NPC
-        const createdNPC = await this.createWalkingNPC();
-        if (createdNPC) {
-          this.walkingNPCs.push(createdNPC);
-          this.initializeNPCState(createdNPC);
-
-          console.log(
-            `Created walking NPC: ${createdNPC.name} at position (${createdNPC.x}, ${createdNPC.y})`
-          );
-
-          // Start the movement and animation loops
-          this.startMovementLoop();
-          this.startAnimationLoop();
-        } else {
-          console.log("Could not create a walking NPC");
-        }
+        console.log("No walking NPCs found");
       }
-    } catch (error) {
-      console.error("Error initializing NPC movement:", error);
+    } catch (err) {
+      console.error("Error initializing NPC movement manager:", err);
+      throw err;
     }
   }
 
-  // Initialize state for a single NPC
+  // Initialize the state for a single NPC
   initializeNPCState(npc) {
-    // Store the original position and initialize state
-    this.npcStates.set(npc.id, {
-      originalPosition: { x: npc.x, y: npc.y },
+    // Default to DOWN direction if not specified
+    const direction = npc.action_direction || DIRECTIONS.DOWN;
+
+    // Create a state object for this NPC
+    const state = {
+      id: npc.id,
+      x: npc.x,
+      y: npc.y,
+      map_id: npc.map_id,
+      direction,
+      frame: this.updateInitialFrameForDirection(npc, direction),
+      movementType: MOVEMENT_TYPES.ANY_DIR, // Default to any direction
+      originalX: npc.x, // Store original position for reset
+      originalY: npc.y,
+      originalDirection: direction,
+      lastMoveTime: Date.now(),
       isMoving: false,
-      movementDelay: Math.floor(Math.random() * 3), // Random initial delay
-      currentDirection: null,
-      isAlternateFrame: false,
-      walkAnimationCounter: 0,
-    });
+    };
 
-    // Initialize sprite frame and flip properties
-    npc.frame = SPRITE_FRAMES.DOWN;
-    npc.flipX = false;
-
-    console.log(
-      `Initialized NPC: ${npc.name} at position (${npc.x}, ${npc.y})`
-    );
+    // Store the state in the map
+    this.npcStates.set(npc.id, state);
   }
 
   // Get all NPCs with action_type = 'WALK' from the database
-  getAllWalkingNPCs() {
-    return new Promise((resolve, reject) => {
-      this.db.all(
-        `SELECT o.id, o.x, o.y, o.map_id, o.sprite_name, o.name, o.action_type, o.action_direction 
-         FROM objects o
-         JOIN maps m ON o.map_id = m.id
-         WHERE o.object_type = 'npc' AND m.is_overworld = 1 AND o.action_type = 'WALK'`,
-        [],
-        (err, rows) => {
-          if (err) {
-            reject(err);
-            return;
-          }
-          resolve(rows || []);
-        }
-      );
-    });
+  async getAllWalkingNPCs() {
+    try {
+      return await this.db.getWalkingNPCs();
+    } catch (err) {
+      console.error("Error getting walking NPCs:", err);
+      return [];
+    }
   }
 
-  // Start the movement loop for all NPCs
+  // Start the movement loop
   startMovementLoop() {
     // Clear any existing interval
     if (this.walkInterval) {
       clearInterval(this.walkInterval);
     }
 
-    // Set up the movement loop (runs every 1 second)
+    // Set up a new interval to move NPCs every 2 seconds
     this.walkInterval = setInterval(() => {
       this.updateAllNPCMovements();
-    }, 1000);
-
-    // console.log(`Started movement loop for ${this.walkingNPCs.length} NPCs`);
+    }, 2000);
   }
 
-  // Start the animation loop for all NPCs
+  // Start the animation loop
   startAnimationLoop() {
     // Clear any existing interval
     if (this.animationInterval) {
       clearInterval(this.animationInterval);
     }
 
-    // Set up the animation loop (runs every 250ms to alternate frames)
+    // Set up a new interval to update animations every 200ms
     this.animationInterval = setInterval(() => {
       this.updateAllNPCAnimations();
-    }, 250);
-
-    // console.log(`Started animation loop for ${this.walkingNPCs.length} NPCs`);
+    }, 200);
   }
 
   // Update animations for all NPCs
   updateAllNPCAnimations() {
     this.walkingNPCs.forEach((npc) => {
       const state = this.npcStates.get(npc.id);
-      if (state && state.isMoving && state.currentDirection) {
-        state.isAlternateFrame = !state.isAlternateFrame;
+      if (state) {
         this.updateNPCAnimation(npc, state);
       }
     });
   }
 
-  // Update the NPC's animation based on direction and movement state
+  // Update the animation frame for a single NPC
   updateNPCAnimation(npc, state) {
-    if (!state.currentDirection) return;
+    // Only animate if the NPC is currently moving
+    if (state.isMoving) {
+      // Toggle between standing and walking frames based on the direction
+      switch (state.direction) {
+        case DIRECTIONS.DOWN:
+          state.frame =
+            state.frame === SPRITE_FRAMES.DOWN
+              ? SPRITE_FRAMES.WALK_DOWN
+              : SPRITE_FRAMES.DOWN;
+          break;
+        case DIRECTIONS.UP:
+          state.frame =
+            state.frame === SPRITE_FRAMES.UP
+              ? SPRITE_FRAMES.WALK_UP
+              : SPRITE_FRAMES.UP;
+          break;
+        case DIRECTIONS.LEFT:
+          state.frame =
+            state.frame === SPRITE_FRAMES.LEFT
+              ? SPRITE_FRAMES.WALK_LEFT
+              : SPRITE_FRAMES.LEFT;
+          break;
+        case DIRECTIONS.RIGHT:
+          state.frame =
+            state.frame === SPRITE_FRAMES.RIGHT
+              ? SPRITE_FRAMES.WALK_RIGHT
+              : SPRITE_FRAMES.RIGHT;
+          break;
+      }
 
-    switch (state.currentDirection) {
-      case DIRECTIONS.UP:
-        npc.frame = state.isAlternateFrame
-          ? SPRITE_FRAMES.WALK_UP
-          : SPRITE_FRAMES.UP;
-        npc.flipX = false;
-        break;
-      case DIRECTIONS.DOWN:
-        npc.frame = state.isAlternateFrame
-          ? SPRITE_FRAMES.WALK_DOWN
-          : SPRITE_FRAMES.DOWN;
-        npc.flipX = false;
-        break;
-      case DIRECTIONS.LEFT:
-        npc.frame = state.isAlternateFrame
-          ? SPRITE_FRAMES.WALK_LEFT
-          : SPRITE_FRAMES.LEFT;
-        npc.flipX = false;
-        break;
-      case DIRECTIONS.RIGHT:
-        npc.frame = state.isAlternateFrame
-          ? SPRITE_FRAMES.WALK_RIGHT
-          : SPRITE_FRAMES.RIGHT;
-        npc.flipX = true;
-        break;
+      // Broadcast the updated frame
+      this.broadcastNPCUpdate(npc);
     }
-
-    // Broadcast the animation update
-    this.broadcastNPCUpdate(npc);
   }
 
-  // Update movement for all NPCs
+  // Update movements for all NPCs
   updateAllNPCMovements() {
-    // Process each NPC independently
     this.walkingNPCs.forEach((npc) => {
       this.updateSingleNPCMovement(npc);
     });
   }
 
-  // Update a single NPC's movement
+  // Update the movement for a single NPC
   async updateSingleNPCMovement(npc) {
     try {
       const state = this.npcStates.get(npc.id);
       if (!state) return;
 
-      // If NPC is currently moving, don't start a new movement
-      if (state.isMoving) {
+      // Only move if enough time has passed since the last move
+      const now = Date.now();
+      if (now - state.lastMoveTime < 1000) {
         return;
       }
 
-      // Determine if it's time to move
-      if (state.movementDelay > 0) {
-        state.movementDelay--;
-        return;
-      }
-
-      // Determine direction based on action_direction
+      // Determine which direction to move
       const direction = this.determineMovementDirection(npc);
-      state.currentDirection = direction;
+      if (!direction) {
+        // If no direction is available, just update the standing frame
+        this.updateStandingFrame(npc, state.direction);
+        return;
+      }
 
-      // Set initial frame for the direction
-      this.updateInitialFrameForDirection(npc, direction);
-
-      // Check if the NPC can move in that direction
+      // Check if the NPC can move in this direction
       const canMove = await this.canMoveInDirection(npc, direction);
-
       if (canMove) {
-        // Set moving flag
+        // Set the NPC as moving
         state.isMoving = true;
 
-        // Update NPC position
+        // Move the NPC
         this.moveNPC(npc, direction);
 
-        // Set a random delay before the next movement (1-3 seconds)
-        state.movementDelay = Math.floor(Math.random() * 3) + 1;
+        // Update the last move time
+        state.lastMoveTime = now;
 
-        // Reset moving flag after a short delay (simulating movement time)
+        // After a short delay, set the NPC as not moving
         setTimeout(() => {
           const currentState = this.npcStates.get(npc.id);
           if (currentState) {
             currentState.isMoving = false;
-            // Set the standing-still frame when movement is complete
-            this.updateStandingFrame(npc, currentState.currentDirection);
+            this.updateStandingFrame(npc, direction);
           }
         }, 500);
       } else {
-        // Try again immediately with a different direction
-        state.movementDelay = 0;
+        // If the NPC can't move, just update the standing frame
+        this.updateStandingFrame(npc, direction);
       }
-    } catch (error) {
-      console.error(`Error updating NPC ${npc.id} movement:`, error);
+    } catch (err) {
+      console.error(`Error updating NPC ${npc.id} movement:`, err);
     }
   }
 
-  // Set the standing-still frame based on the NPC's current direction
+  // Update the standing frame for an NPC
   updateStandingFrame(npc, direction) {
-    if (!direction) return;
+    const state = this.npcStates.get(npc.id);
+    if (!state) return;
 
+    // Update the direction
+    state.direction = direction;
+
+    // Set the appropriate standing frame
     switch (direction) {
-      case DIRECTIONS.UP:
-        npc.frame = SPRITE_FRAMES.UP;
-        npc.flipX = false;
-        break;
       case DIRECTIONS.DOWN:
-        npc.frame = SPRITE_FRAMES.DOWN;
-        npc.flipX = false;
+        state.frame = SPRITE_FRAMES.DOWN;
+        break;
+      case DIRECTIONS.UP:
+        state.frame = SPRITE_FRAMES.UP;
         break;
       case DIRECTIONS.LEFT:
-        npc.frame = SPRITE_FRAMES.LEFT;
-        npc.flipX = false;
+        state.frame = SPRITE_FRAMES.LEFT;
         break;
       case DIRECTIONS.RIGHT:
-        npc.frame = SPRITE_FRAMES.RIGHT;
-        npc.flipX = true;
+        state.frame = SPRITE_FRAMES.RIGHT;
         break;
     }
 
-    // Broadcast the frame update
+    // Broadcast the update
     this.broadcastNPCUpdate(npc);
   }
 
-  // Set the initial frame for a direction
+  // Update the initial frame based on the direction
   updateInitialFrameForDirection(npc, direction) {
     switch (direction) {
-      case DIRECTIONS.UP:
-        npc.frame = SPRITE_FRAMES.UP;
-        npc.flipX = false;
-        break;
       case DIRECTIONS.DOWN:
-        npc.frame = SPRITE_FRAMES.DOWN;
-        npc.flipX = false;
-        break;
+        return SPRITE_FRAMES.DOWN;
+      case DIRECTIONS.UP:
+        return SPRITE_FRAMES.UP;
       case DIRECTIONS.LEFT:
-        npc.frame = SPRITE_FRAMES.LEFT;
-        npc.flipX = false;
-        break;
+        return SPRITE_FRAMES.LEFT;
       case DIRECTIONS.RIGHT:
-        npc.frame = SPRITE_FRAMES.RIGHT;
-        npc.flipX = true;
-        break;
+        return SPRITE_FRAMES.RIGHT;
+      default:
+        return SPRITE_FRAMES.DOWN; // Default to down
     }
-
-    // Broadcast the initial frame update
-    this.broadcastNPCUpdate(npc);
   }
 
-  // Determine which direction the NPC should move based on action_direction
+  // Determine which direction the NPC should move
   determineMovementDirection(npc) {
-    const { action_direction } = npc;
+    const state = this.npcStates.get(npc.id);
+    if (!state) return null;
 
-    // If the NPC has a specific movement pattern
-    if (action_direction === MOVEMENT_TYPES.UP_DOWN) {
-      // Only move up or down
-      return Math.random() < 0.5 ? DIRECTIONS.UP : DIRECTIONS.DOWN;
-    } else if (action_direction === MOVEMENT_TYPES.LEFT_RIGHT) {
-      // Only move left or right
-      return Math.random() < 0.5 ? DIRECTIONS.LEFT : DIRECTIONS.RIGHT;
-    } else {
-      // Can move in any direction
-      const directions = [
-        DIRECTIONS.UP,
-        DIRECTIONS.DOWN,
-        DIRECTIONS.LEFT,
-        DIRECTIONS.RIGHT,
-      ];
-      return directions[Math.floor(Math.random() * directions.length)];
-    }
+    // For now, just pick a random direction
+    const directions = Object.values(DIRECTIONS);
+    const randomIndex = Math.floor(Math.random() * directions.length);
+    const newDirection = directions[randomIndex];
+
+    // Update the state with the new direction
+    state.direction = newDirection;
+
+    return newDirection;
   }
 
-  // Check if the NPC can move in the specified direction
+  // Check if the NPC can move in a specific direction
   async canMoveInDirection(npc, direction) {
-    const { x, y, map_id } = npc;
+    const state = this.npcStates.get(npc.id);
+    if (!state) return false;
 
     // Calculate the new position
-    let newX = x;
-    let newY = y;
+    let newX = state.x;
+    let newY = state.y;
 
     switch (direction) {
       case DIRECTIONS.UP:
@@ -361,115 +312,111 @@ class NPCMovementManager {
         break;
     }
 
-    // Check if the new position is walkable
     try {
       // Check if there's a tile at the new position
-      const tile = await this.getTileAt(newX, newY, map_id);
+      const tile = await this.getTileAt(newX, newY, state.map_id);
       if (!tile) {
         return false;
       }
 
-      // Check if there's a collision at the new position (like another NPC, item, etc.)
-      const collision = await this.checkCollision(newX, newY, map_id, npc.id);
+      // Check if there's a collision at the new position
+      const collision = await this.checkCollision(
+        newX,
+        newY,
+        state.map_id,
+        npc.id
+      );
       if (collision) {
         return false;
       }
 
       return true;
-    } catch (error) {
-      console.error(`Error checking if NPC ${npc.id} can move:`, error);
+    } catch (err) {
+      console.error(
+        `Error checking if NPC ${npc.id} can move to (${newX}, ${newY}):`,
+        err
+      );
       return false;
     }
   }
 
   // Get the tile at a specific position
-  getTileAt(x, y, mapId) {
-    return new Promise((resolve, reject) => {
-      this.db.get(
-        "SELECT * FROM tiles WHERE x = ? AND y = ? AND map_id = ?",
-        [x, y, mapId],
-        (err, row) => {
-          if (err) {
-            reject(err);
-            return;
-          }
-          resolve(row);
-        }
-      );
-    });
+  async getTileAt(x, y, mapId) {
+    try {
+      return await this.db.getTileAt(x, y, mapId);
+    } catch (err) {
+      console.error(`Error getting tile at (${x}, ${y}) on map ${mapId}:`, err);
+      return null;
+    }
   }
 
   // Check if there's a collision at a specific position
-  checkCollision(x, y, mapId, npcId) {
-    return new Promise((resolve, reject) => {
-      // Check for NPCs, items, or other objects at this position
-      this.db.get(
-        `SELECT * FROM objects 
-         WHERE x = ? AND y = ? AND map_id = ? AND id != ?`,
-        [x, y, mapId, npcId],
-        (err, row) => {
-          if (err) {
-            reject(err);
-            return;
-          }
-
-          // If there's an object at this position, there's a collision
-          resolve(!!row);
-        }
+  async checkCollision(x, y, mapId, npcId) {
+    try {
+      return await this.db.checkCollision(x, y, mapId, npcId);
+    } catch (err) {
+      console.error(
+        `Error checking collision at (${x}, ${y}) on map ${mapId}:`,
+        err
       );
-    });
+      return true; // Assume collision on error
+    }
   }
 
-  // Move the NPC in the specified direction (in memory only)
+  // Move the NPC in a specific direction
   moveNPC(npc, direction) {
-    // Calculate the new position
-    let newX = npc.x;
-    let newY = npc.y;
+    const state = this.npcStates.get(npc.id);
+    if (!state) return;
 
+    // Update the position based on the direction
     switch (direction) {
       case DIRECTIONS.UP:
-        newY--;
+        state.y--;
         break;
       case DIRECTIONS.DOWN:
-        newY++;
+        state.y++;
         break;
       case DIRECTIONS.LEFT:
-        newX--;
+        state.x--;
         break;
       case DIRECTIONS.RIGHT:
-        newX++;
+        state.x++;
         break;
     }
 
-    // Update the local NPC object (in memory only)
-    npc.x = newX;
-    npc.y = newY;
+    // Update the NPC object with the new position
+    npc.x = state.x;
+    npc.y = state.y;
 
-    // console.log(`NPC ${npc.name} moved to (${newX}, ${newY})`);
-
-    // Broadcast the update to all connected clients
+    // Broadcast the update
     this.broadcastNPCUpdate(npc);
   }
 
-  // Broadcast the NPC update to all connected clients
+  // Broadcast an NPC update to all connected clients
   broadcastNPCUpdate(npc) {
-    const updateMessage = JSON.stringify({
+    const state = this.npcStates.get(npc.id);
+    if (!state || !this.wss) return;
+
+    // Create the update message
+    const updateMessage = {
       type: "npcUpdate",
       npc: {
         id: npc.id,
-        x: npc.x,
-        y: npc.y,
+        x: state.x,
+        y: state.y,
+        map_id: state.map_id,
         sprite_name: npc.sprite_name,
         name: npc.name,
-        map_id: npc.map_id,
-        frame: npc.frame,
-        flipX: npc.flipX,
+        direction: state.direction,
+        frame: state.frame,
+        isMoving: state.isMoving,
       },
-    });
+    };
 
+    // Broadcast to all connected clients
     this.wss.clients.forEach((client) => {
       if (client.readyState === WebSocket.OPEN) {
-        client.send(updateMessage);
+        client.send(JSON.stringify(updateMessage));
       }
     });
   }
@@ -478,14 +425,20 @@ class NPCMovementManager {
   resetToOriginalPosition() {
     this.walkingNPCs.forEach((npc) => {
       const state = this.npcStates.get(npc.id);
-      if (state && state.originalPosition) {
-        npc.x = state.originalPosition.x;
-        npc.y = state.originalPosition.y;
-        npc.frame = SPRITE_FRAMES.DOWN;
-        npc.flipX = false;
-        console.log(
-          `Reset NPC ${npc.name} to original position (${state.originalPosition.x}, ${state.originalPosition.y})`
+      if (state) {
+        // Reset the position and direction
+        state.x = state.originalX;
+        state.y = state.originalY;
+        state.direction = state.originalDirection;
+        state.frame = this.updateInitialFrameForDirection(
+          npc,
+          state.originalDirection
         );
+        state.isMoving = false;
+
+        // Update the NPC object
+        npc.x = state.x;
+        npc.y = state.y;
 
         // Broadcast the update
         this.broadcastNPCUpdate(npc);
@@ -498,129 +451,60 @@ class NPCMovementManager {
     const npc = this.walkingNPCs.find((n) => n.id === npcId);
     const state = this.npcStates.get(npcId);
 
-    if (npc && state && state.originalPosition) {
-      npc.x = state.originalPosition.x;
-      npc.y = state.originalPosition.y;
-      npc.frame = SPRITE_FRAMES.DOWN;
-      npc.flipX = false;
-      console.log(
-        `Reset NPC ${npc.name} to original position (${state.originalPosition.x}, ${state.originalPosition.y})`
+    if (npc && state) {
+      // Reset the position and direction
+      state.x = state.originalX;
+      state.y = state.originalY;
+      state.direction = state.originalDirection;
+      state.frame = this.updateInitialFrameForDirection(
+        npc,
+        state.originalDirection
       );
+      state.isMoving = false;
+
+      // Update the NPC object
+      npc.x = state.x;
+      npc.y = state.y;
 
       // Broadcast the update
       this.broadcastNPCUpdate(npc);
       return true;
     }
+
     return false;
   }
 
-  // Stop the movement loop
+  // Stop the movement and animation loops
   stopMovementLoop() {
     if (this.walkInterval) {
       clearInterval(this.walkInterval);
       this.walkInterval = null;
-      console.log(`Stopped movement loop for ${this.walkingNPCs.length} NPCs`);
     }
 
     if (this.animationInterval) {
       clearInterval(this.animationInterval);
       this.animationInterval = null;
-      console.log(`Stopped animation loop for ${this.walkingNPCs.length} NPCs`);
     }
+
+    console.log("NPC movement loops stopped");
   }
 
-  // Create a walking NPC by converting an existing STAY NPC to WALK
-  async createWalkingNPC() {
+  // Get an NPC by ID
+  async getNPCById(npcId) {
     try {
-      // Find a suitable NPC to convert (first STAY NPC in an overworld map)
-      const npc = await this.findSuitableNPCToConvert();
-
-      if (!npc) {
-        console.log("No suitable NPCs found to convert to walking");
-        return null;
-      }
-
-      // Update the NPC in the database to be a walking NPC
-      await this.convertNPCToWalking(npc.id);
-
-      // Get the updated NPC
-      const updatedNPC = await this.getNPCById(npc.id);
-
-      // Add frame and flipX properties
-      updatedNPC.frame = SPRITE_FRAMES.DOWN;
-      updatedNPC.flipX = false;
-
-      return updatedNPC;
-    } catch (error) {
-      console.error("Error creating walking NPC:", error);
+      return await this.db.getNPCById(npcId);
+    } catch (err) {
+      console.error(`Error getting NPC ${npcId}:`, err);
       return null;
     }
   }
 
-  // Find a suitable NPC to convert to walking
-  findSuitableNPCToConvert() {
-    return new Promise((resolve, reject) => {
-      this.db.get(
-        `SELECT o.id, o.x, o.y, o.map_id, o.sprite_name, o.name, o.action_type, o.action_direction 
-         FROM objects o
-         JOIN maps m ON o.map_id = m.id
-         WHERE o.object_type = 'npc' AND m.is_overworld = 1 AND o.action_type = 'STAY'
-         LIMIT 1`,
-        [],
-        (err, row) => {
-          if (err) {
-            reject(err);
-            return;
-          }
-          resolve(row);
-        }
-      );
-    });
-  }
-
-  // Convert an NPC to a walking NPC
-  convertNPCToWalking(npcId) {
-    return new Promise((resolve, reject) => {
-      this.db.run(
-        "UPDATE objects SET action_type = 'WALK', action_direction = 'ANY_DIR' WHERE id = ?",
-        [npcId],
-        (err) => {
-          if (err) {
-            reject(err);
-            return;
-          }
-          resolve();
-        }
-      );
-    });
-  }
-
-  // Get an NPC by ID
-  getNPCById(npcId) {
-    return new Promise((resolve, reject) => {
-      this.db.get(
-        `SELECT o.id, o.x, o.y, o.map_id, o.sprite_name, o.name, o.action_type, o.action_direction 
-         FROM objects o
-         JOIN maps m ON o.map_id = m.id
-         WHERE o.id = ?`,
-        [npcId],
-        (err, row) => {
-          if (err) {
-            reject(err);
-            return;
-          }
-          resolve(row);
-        }
-      );
-    });
-  }
-
-  // Get all walking NPCs (for API endpoint)
+  // Get all NPCs
   getAllNPCs() {
     return this.walkingNPCs;
   }
 
-  // Get a specific NPC by ID (for API endpoint)
+  // Get a specific NPC by ID
   getNPC(npcId) {
     return this.walkingNPCs.find((npc) => npc.id === npcId);
   }
