@@ -54,6 +54,21 @@ export interface NpcUpdateEvent {
   };
 }
 
+export interface WalkingNpcsListEvent {
+  npcs: Array<{
+    id: number;
+    x: number;
+    y: number;
+    map_id: number;
+    sprite_name: string;
+    name: string;
+    action_type: string;
+    action_direction: string;
+    frame?: number;
+    flipX?: boolean;
+  }>;
+}
+
 export class WebSocketService {
   private socket: WebSocket | null = null;
   private reconnectInterval: number = 5000; // 5 seconds
@@ -88,6 +103,9 @@ export class WebSocketService {
         // Subscribe to tile updates
         this.send({ type: "subscribe" });
 
+        // Request the current list of walking NPCs
+        this.requestWalkingNpcs();
+
         // Emit connection event
         this.events.emit("connected");
       };
@@ -108,6 +126,12 @@ export class WebSocketService {
             case "npcUpdate":
               this.events.emit("npcUpdate", {
                 npc: data.npc,
+              });
+              break;
+
+            case "walkingNpcsList":
+              this.events.emit("walkingNpcsList", {
+                npcs: data.npcs,
               });
               break;
 
@@ -174,6 +198,10 @@ export class WebSocketService {
     } else {
       console.warn("Cannot send message, WebSocket is not connected");
     }
+  }
+
+  requestWalkingNpcs(): void {
+    this.send({ type: "requestWalkingNpcs" });
   }
 
   on(event: string, listener: (...args: any[]) => void): void {

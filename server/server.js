@@ -17,8 +17,8 @@ let npcMovementManager = null;
 // Enable CORS for all routes
 app.use(cors());
 
-// Serve static files from the 'dist' directory
-app.use(express.static(path.join(__dirname, ".")));
+// Serve static files from the pokemon-phaser directory
+app.use(express.static(path.join(__dirname, "../pokemon-phaser")));
 
 // Remove direct access to parent directory
 // app.use(express.static(path.join(__dirname, "..")));
@@ -169,7 +169,7 @@ app.get("/api/sprite/:name", (req, res) => {
 });
 
 // Connect to the SQLite database
-const db = new sqlite3.Database("../pokemon.db", (err) => {
+const db = new sqlite3.Database("pokemon.db", (err) => {
   if (err) {
     console.error("Error connecting to the database:", err.message);
   }
@@ -432,6 +432,25 @@ wss.on("connection", (ws, req) => {
             message: "Subscribed to tile updates",
           })
         );
+      } else if (data.type === "requestWalkingNpcs") {
+        // Client is requesting the current list of walking NPCs
+        if (npcMovementManager) {
+          const walkingNpcs = npcMovementManager.getAllNPCs();
+          ws.send(
+            JSON.stringify({
+              type: "walkingNpcsList",
+              npcs: walkingNpcs,
+            })
+          );
+        } else {
+          ws.send(
+            JSON.stringify({
+              type: "walkingNpcsList",
+              npcs: [],
+              error: "NPC movement manager not initialized",
+            })
+          );
+        }
       }
     } catch (error) {
       console.error("Error processing message:", error);
@@ -473,7 +492,7 @@ setInterval(() => {
 
 // Catch-all route to serve the main index.html for client-side routing
 app.get("*", (req, res) => {
-  res.sendFile(path.join(__dirname, "dist", "index.html"));
+  res.sendFile(path.join(__dirname, "../pokemon-phaser", "index.html"));
 });
 
 // Start the server
