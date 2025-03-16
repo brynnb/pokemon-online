@@ -4,10 +4,12 @@
     "description": "Pokemon Online Game with Phaser",
     "main": "server/server.js",
     "scripts": {
+        "export": "node export_scripts/export.js",
         "start": "node server/server.js",
         "dev": "nodemon server/server.js",
         "client": "cd pokemon-phaser && npm run dev",
-        "start:all": "node start-dev.js"
+        "start:all": "node start-dev.js",
+        "postinstall": "git submodule update --init --recursive"
     },
     "author": "",
     "license": "MIT",

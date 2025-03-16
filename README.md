@@ -12,6 +12,20 @@ This project relies heavily on my other project, which is dedicated to the data 
 
 ## Installation
 
+### Cloning the Repository
+
+```bash
+# Clone with submodules (recommended)
+git clone https://github.com/brynnb/pokemon-online.git --recurse-submodules
+
+# OR clone normally and then initialize submodules
+git clone https://github.com/brynnb/pokemon-online.git
+cd pokemon-online
+git submodule update --init --recursive
+```
+
+### Installing Dependencies
+
 ```bash
 npm install
 npm run export
