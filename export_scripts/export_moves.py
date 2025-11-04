@@ -2,7 +2,12 @@
 import os
 import re
 import sqlite3
+import sys
 from pathlib import Path
+
+# Add parent directory to path to import utils
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
+from utils.database import bulk_insert
 
 # Constants
 # Get the project root directory (parent of the script's directory)
@@ -297,7 +302,8 @@ def main():
     move_grammar = parse_move_grammar()
     battle_animations = parse_battle_animations()
 
-    # Insert data into database
+    # Collect data for bulk insert
+    moves_bulk_data = []
     for move_name, move_data in moves_data.items():
         # Get the move ID from the constants
         move_id = move_constants.get(move_name, 0)
@@ -343,43 +349,45 @@ def main():
         # Get the type for this move
         type_name = move_data["type"]
 
-        cursor.execute(
-            """
-            INSERT INTO moves (
-                id, name, short_name, effect, power, type, accuracy, pp,
-                battle_animation, battle_sound, battle_sound_pitch, battle_sound_tempo,
-                battle_subanimation, battle_tileset, battle_delay,
-                field_move_effect, grammar_type, is_hm
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-            """,
-            (
-                move_id,
-                name,
-                short_name,
-                move_data["effect"],
-                move_data["power"],
-                type_name,
-                move_data["accuracy"],
-                move_data["pp"],
-                move_data["animation"],
-                sound_data["sound"],
-                sound_data["pitch"],
-                sound_data["tempo"],
-                battle_subanimation,
-                battle_tileset,
-                battle_delay,
-                field_move_effect,
-                grammar_type,
-                is_hm,
-            ),
+        moves_bulk_data.append((
+            move_id,
+            name,
+            short_name,
+            move_data["effect"],
+            move_data["power"],
+            type_name,
+            move_data["accuracy"],
+            move_data["pp"],
+            move_data["animation"],
+            sound_data["sound"],
+            sound_data["pitch"],
+            sound_data["tempo"],
+            battle_subanimation,
+            battle_tileset,
+            battle_delay,
+            field_move_effect,
+            grammar_type,
+            is_hm,
+        ))
+
+    # Bulk insert all moves data
+    if moves_bulk_data:
+        bulk_insert(
+            conn,
+            'moves',
+            ['id', 'name', 'short_name', 'effect', 'power', 'type', 'accuracy', 'pp',
+             'battle_animation', 'battle_sound', 'battle_sound_pitch', 'battle_sound_tempo',
+             'battle_subanimation', 'battle_tileset', 'battle_delay',
+             'field_move_effect', 'grammar_type', 'is_hm'],
+            moves_bulk_data,
+            batch_size=165  # All moves in one batch
         )
 
-    # Commit changes and close connection
-    conn.commit()
+    # Close connection
     conn.close()
 
     # Log number of moves exported
-    print(f"Successfully exported {len(moves_data)} moves to pokemon.db")
+    print(f"Successfully exported {len(moves_bulk_data)} moves to pokemon.db")
 
 
 if __name__ == "__main__":

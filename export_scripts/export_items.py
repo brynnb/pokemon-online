@@ -2,7 +2,12 @@
 import os
 import re
 import sqlite3
+import sys
 from pathlib import Path
+
+# Add parent directory to path to import utils
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
+from utils.database import bulk_insert
 
 # Constants
 BASE_DIR = Path(
@@ -330,8 +335,8 @@ def main():
     for item_name, is_key in key_items_data:
         key_item_map[item_name] = is_key
 
-    # Insert items into database
-    item_count = 0
+    # Collect items data for bulk insert
+    items_data = []
     for i, name in enumerate(item_names):
         item_id = i + 1  # Item IDs start at 1
         short_name = item_id_to_name.get(item_id, f"UNKNOWN_{item_id}")
@@ -358,28 +363,18 @@ def main():
         # Get move ID if it's a TM/HM
         move_id = tm_hm_moves.get(item_id)
 
-        # Insert into database
-        cursor.execute(
-            """
-        INSERT INTO items (
-            id, name, short_name, price, is_usable, uses_party_menu, 
-            vending_price, move_id, is_guard_drink, is_key_item
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-        """,
-            (
-                item_id,
-                name,
-                short_name,
-                price_value,
-                1 if is_usable else 0,
-                1 if uses_party_menu else 0,
-                vending_price,
-                move_id,
-                1 if is_guard_drink else 0,
-                1 if is_key_item else 0,
-            ),
-        )
-        item_count += 1
+        items_data.append((
+            item_id,
+            name,
+            short_name,
+            price_value,
+            1 if is_usable else 0,
+            1 if uses_party_menu else 0,
+            vending_price,
+            move_id,
+            1 if is_guard_drink else 0,
+            1 if is_key_item else 0,
+        ))
 
     # Read move names for TM/HM items
     move_names = {}
@@ -394,13 +389,11 @@ def main():
         move_id = int(match.group(2), 16)
         move_names[move_id] = move_name
 
-    # Get the next available item ID
-    cursor.execute("SELECT MAX(id) FROM items")
-    max_id = cursor.fetchone()[0]
-    next_id = max_id + 1
+    # Calculate next available item ID
+    next_id = len(items_data) + 1
 
-    # Add HM items (HM01-HM05)
-    hm_count = 0
+    # Collect HM items data (HM01-HM05)
+    hm_tm_data = []
     for i in range(5):
         original_item_id = 0xC4 + i  # HMs start at 0xC4
         hm_number = i + 1
@@ -411,34 +404,21 @@ def main():
             item_name = f"HM{hm_number:02d}"
             short_name = f"HM_{move_name}"
 
-            try:
-                # Insert HM item into database with sequential ID
-                cursor.execute(
-                    """
-                INSERT INTO items (
-                    id, name, short_name, price, is_usable, uses_party_menu, 
-                    move_id, is_guard_drink, is_key_item
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
-                """,
-                    (
-                        next_id,
-                        item_name,
-                        short_name,
-                        None,  # HMs don't have a price
-                        1,  # HMs are usable
-                        1,  # HMs use party menu
-                        move_id,
-                        0,  # Not a guard drink
-                        1,  # HMs are key items
-                    ),
-                )
-                hm_count += 1
-                next_id += 1
-            except sqlite3.Error as e:
-                print(f"Error adding HM item {item_name}: {e}")
+            hm_tm_data.append((
+                next_id,
+                item_name,
+                short_name,
+                None,  # HMs don't have a price
+                1,  # HMs are usable
+                1,  # HMs use party menu
+                None,  # vending_price
+                move_id,
+                0,  # Not a guard drink
+                1,  # HMs are key items
+            ))
+            next_id += 1
 
-    # Add TM items (TM01-TM50)
-    tm_count = 0
+    # Collect TM items data (TM01-TM50)
     for i in range(50):
         original_item_id = 0xC9 + i  # TMs start at 0xC9
         tm_number = i + 1
@@ -452,39 +432,38 @@ def main():
             # TMs have a price (placeholder for now)
             price = 3000
 
-            try:
-                # Insert TM item into database with sequential ID
-                cursor.execute(
-                    """
-                INSERT INTO items (
-                    id, name, short_name, price, is_usable, uses_party_menu, 
-                    move_id, is_guard_drink, is_key_item
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
-                """,
-                    (
-                        next_id,
-                        item_name,
-                        short_name,
-                        price,
-                        1,  # TMs are usable
-                        1,  # TMs use party menu
-                        move_id,
-                        0,  # Not a guard drink
-                        0,  # TMs are not key items
-                    ),
-                )
-                tm_count += 1
-                next_id += 1
-            except sqlite3.Error as e:
-                print(f"Error adding TM item {item_name}: {e}")
+            hm_tm_data.append((
+                next_id,
+                item_name,
+                short_name,
+                price,
+                1,  # TMs are usable
+                1,  # TMs use party menu
+                None,  # vending_price
+                move_id,
+                0,  # Not a guard drink
+                0,  # TMs are not key items
+            ))
+            next_id += 1
 
-    print(f"Added {hm_count} HM items and {tm_count} TM items to the database")
+    # Combine all items data
+    all_items_data = items_data + hm_tm_data
 
-    # Commit changes and close connection
-    conn.commit()
+    # Bulk insert all items
+    if all_items_data:
+        bulk_insert(
+            conn,
+            'items',
+            ['id', 'name', 'short_name', 'price', 'is_usable', 'uses_party_menu',
+             'vending_price', 'move_id', 'is_guard_drink', 'is_key_item'],
+            all_items_data,
+            batch_size=500
+        )
+
+    # Close connection
     conn.close()
 
-    print(f"Successfully exported {item_count} items to pokemon.db")
+    print(f"Successfully exported {len(all_items_data)} items to pokemon.db (including {len(hm_tm_data)} HM/TM items)")
 
 
 if __name__ == "__main__":

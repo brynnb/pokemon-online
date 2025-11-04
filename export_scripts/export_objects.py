@@ -2,7 +2,12 @@
 import os
 import re
 import sqlite3
+import sys
 from pathlib import Path
+
+# Add parent directory to path to import utils
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
+from utils.database import bulk_insert
 
 # Constants
 # Get the project root directory (parent of the script's directory)
@@ -288,42 +293,45 @@ def main():
 
     print(f"Processed {processed_count} map files, found {len(all_objects)} objects")
 
-    # Insert objects into database
+    # Prepare data for bulk insert
+    objects_data = []
     signs_count = 0
     sprites_count = 0
 
     for obj in all_objects:
-        cursor.execute(
-            """
-        INSERT INTO objects (
-            name, map_id, object_type, x, y, local_x, local_y,
-            spriteset_id, sprite_name, text, action_type, action_direction, item_id
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-        """,
-            (
-                obj.get("name"),
-                obj.get("map_id"),
-                obj.get("object_type"),
-                obj.get("x"),
-                obj.get("y"),
-                obj.get("local_x"),
-                obj.get("local_y"),
-                obj.get("spriteset_id"),
-                obj.get("sprite_name"),
-                obj.get("text"),
-                obj.get("action_type"),
-                obj.get("action_direction"),
-                obj.get("item_id"),
-            ),
-        )
+        objects_data.append((
+            obj.get("name"),
+            obj.get("map_id"),
+            obj.get("object_type"),
+            obj.get("x"),
+            obj.get("y"),
+            obj.get("local_x"),
+            obj.get("local_y"),
+            obj.get("spriteset_id"),
+            obj.get("sprite_name"),
+            obj.get("text"),
+            obj.get("action_type"),
+            obj.get("action_direction"),
+            obj.get("item_id"),
+        ))
 
         if obj.get("object_type") == "sign":
             signs_count += 1
         else:
             sprites_count += 1
 
-    # Commit changes and close connection
-    conn.commit()
+    # Bulk insert all objects
+    if objects_data:
+        bulk_insert(
+            conn,
+            'objects',
+            ['name', 'map_id', 'object_type', 'x', 'y', 'local_x', 'local_y',
+             'spriteset_id', 'sprite_name', 'text', 'action_type', 'action_direction', 'item_id'],
+            objects_data,
+            batch_size=1000
+        )
+
+    # Close connection
     conn.close()
 
     print(

@@ -2,8 +2,13 @@
 import os
 import re
 import sqlite3
+import sys
 from pathlib import Path
 from collections import defaultdict
+
+# Add parent directory to path to import utils
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
+from utils.database import bulk_insert
 
 # Constants
 # Get the project root directory (parent of the script's directory)
@@ -547,8 +552,8 @@ def main():
         all_warps, cursor, map_to_map_id, map_formats
     )
 
-    # Insert warps into database
-    inserted_count = 0
+    # Collect warps data for bulk insert
+    warps_data = []
     for warp in resolved_warps:
         # Calculate global coordinates for overworld warps
         x = None
@@ -582,39 +587,33 @@ def main():
             x = warp["source_x"]
             y = warp["source_y"]
 
-        # Use a parameterized query with explicit column names
-        cursor.execute(
-            """
-            INSERT INTO warps (
-                source_map, source_map_id, source_x, source_y,
-                x, y, destination_map, destination_map_id, 
-                destination_x, destination_y, destination_warp_id
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-            """,
-            (
-                warp["source_map"],
-                warp["source_map_id"],
-                warp["source_x"],
-                warp["source_y"],
-                x,  # Explicitly pass x
-                y,  # Explicitly pass y
-                warp["destination_map"],
-                warp["destination_map_id"],
-                warp["destination_x"],
-                warp["destination_y"],
-                warp["destination_warp_id"],
-            ),
+        warps_data.append((
+            warp["source_map"],
+            warp["source_map_id"],
+            warp["source_x"],
+            warp["source_y"],
+            x,  # Explicitly pass x
+            y,  # Explicitly pass y
+            warp["destination_map"],
+            warp["destination_map_id"],
+            warp["destination_x"],
+            warp["destination_y"],
+            warp["destination_warp_id"],
+        ))
+
+    # Bulk insert all warps
+    if warps_data:
+        bulk_insert(
+            conn,
+            'warps',
+            ['source_map', 'source_map_id', 'source_x', 'source_y',
+             'x', 'y', 'destination_map', 'destination_map_id',
+             'destination_x', 'destination_y', 'destination_warp_id'],
+            warps_data,
+            batch_size=500
         )
-        inserted_count += 1
 
-        # Commit more frequently to ensure data is saved
-        if inserted_count % 50 == 0:
-            conn.commit()
-            print(f"Committed {inserted_count} warps so far")
-
-    # Final commit
-    conn.commit()
-    print(f"Final commit: Successfully exported {inserted_count} warps to pokemon.db")
+    print(f"Successfully exported {len(warps_data)} warps to pokemon.db")
 
     # Close the database connection
     conn.close()

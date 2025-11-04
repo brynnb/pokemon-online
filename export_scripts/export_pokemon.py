@@ -8,6 +8,7 @@ import sys
 # Add the root directory to the Python path to allow imports from utils
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 from utils.pokemon_utils import SPECIAL_NAME_MAPPINGS, normalize_pokemon_name
+from utils.database import bulk_insert
 
 # Constants
 # Get the project root directory (parent of the script's directory)
@@ -406,65 +407,58 @@ def main():
     menu_icons = extract_menu_icons()
     palettes = extract_palettes()
 
-    # Insert data into database
+    # Collect data for bulk insert
+    pokemon_data = []
     for name, dex_num in pokemon_dex.items():
         if name in base_stats:
-            # Prepare data for insertion
-            pokemon_data = {
-                "id": dex_num,
-                "name": name,
-                "hp": base_stats[name]["hp"],
-                "atk": base_stats[name]["atk"],
-                "def": base_stats[name]["def"],
-                "spd": base_stats[name]["spd"],
-                "spc": base_stats[name]["spc"],
-                "type_1": base_stats[name]["type_1"],
-                "type_2": base_stats[name]["type_2"],
-                "catch_rate": base_stats[name]["catch_rate"],
-                "base_exp": base_stats[name]["base_exp"],
-                "default_move_1_id": base_stats[name]["default_move_1_id"],
-                "default_move_2_id": base_stats[name]["default_move_2_id"],
-                "default_move_3_id": base_stats[name]["default_move_3_id"],
-                "default_move_4_id": base_stats[name]["default_move_4_id"],
-                "base_cry": cries.get(name, {}).get("base_cry"),
-                "cry_pitch": cries.get(name, {}).get("cry_pitch"),
-                "cry_length": cries.get(name, {}).get("cry_length"),
-                "pokedex_type": dex_entries.get(name, {}).get("pokedex_type"),
-                "height": dex_entries.get(name, {}).get("height"),
-                "weight": dex_entries.get(name, {}).get("weight"),
-                "pokedex_text": dex_text.get(name),
-                "evolve_level": evolutions.get(name, {}).get("evolve_level"),
-                "evolve_pokemon": evolutions.get(name, {}).get("evolve_pokemon"),
-                "evolves_from_trade": (
-                    1 if evolutions.get(name, {}).get("evolves_from_trade") else 0
-                ),
-                "icon_image": menu_icons.get(name),
-                "palette_type": palettes.get(name),
-            }
+            pokemon_data.append((
+                dex_num,
+                name,
+                base_stats[name]["hp"],
+                base_stats[name]["atk"],
+                base_stats[name]["def"],
+                base_stats[name]["spd"],
+                base_stats[name]["spc"],
+                base_stats[name]["type_1"],
+                base_stats[name]["type_2"],
+                base_stats[name]["catch_rate"],
+                base_stats[name]["base_exp"],
+                base_stats[name]["default_move_1_id"],
+                base_stats[name]["default_move_2_id"],
+                base_stats[name]["default_move_3_id"],
+                base_stats[name]["default_move_4_id"],
+                cries.get(name, {}).get("base_cry"),
+                cries.get(name, {}).get("cry_pitch"),
+                cries.get(name, {}).get("cry_length"),
+                dex_entries.get(name, {}).get("pokedex_type"),
+                dex_entries.get(name, {}).get("height"),
+                dex_entries.get(name, {}).get("weight"),
+                dex_text.get(name),
+                evolutions.get(name, {}).get("evolve_level"),
+                evolutions.get(name, {}).get("evolve_pokemon"),
+                1 if evolutions.get(name, {}).get("evolves_from_trade") else 0,
+                menu_icons.get(name),
+                palettes.get(name),
+            ))
 
-            # Insert into database
-            cursor.execute(
-                """
-            INSERT INTO pokemon (
-                id, name, hp, atk, def, spd, spc, type_1, type_2, catch_rate, base_exp,
-                default_move_1_id, default_move_2_id, default_move_3_id, default_move_4_id,
-                base_cry, cry_pitch, cry_length, pokedex_type, height, weight, pokedex_text,
-                evolve_level, evolve_pokemon, evolves_from_trade, icon_image, palette_type
-            ) VALUES (
-                :id, :name, :hp, :atk, :def, :spd, :spc, :type_1, :type_2, :catch_rate, :base_exp,
-                :default_move_1_id, :default_move_2_id, :default_move_3_id, :default_move_4_id,
-                :base_cry, :cry_pitch, :cry_length, :pokedex_type, :height, :weight, :pokedex_text,
-                :evolve_level, :evolve_pokemon, :evolves_from_trade, :icon_image, :palette_type
-            )
-            """,
-                pokemon_data,
-            )
+    # Bulk insert all pokemon data
+    if pokemon_data:
+        bulk_insert(
+            conn,
+            'pokemon',
+            ['id', 'name', 'hp', 'atk', 'def', 'spd', 'spc', 'type_1', 'type_2',
+             'catch_rate', 'base_exp', 'default_move_1_id', 'default_move_2_id',
+             'default_move_3_id', 'default_move_4_id', 'base_cry', 'cry_pitch',
+             'cry_length', 'pokedex_type', 'height', 'weight', 'pokedex_text',
+             'evolve_level', 'evolve_pokemon', 'evolves_from_trade', 'icon_image', 'palette_type'],
+            pokemon_data,
+            batch_size=151  # All pokemon in one batch
+        )
 
-    # Commit changes and close connection
-    conn.commit()
+    # Close connection
     conn.close()
 
-    print(f"Exported data for {len(pokemon_dex)} Pokémon to pokemon.db")
+    print(f"Exported data for {len(pokemon_data)} Pokémon to pokemon.db")
 
 
 if __name__ == "__main__":

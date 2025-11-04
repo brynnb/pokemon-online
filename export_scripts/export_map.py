@@ -28,10 +28,15 @@ import re
 import sqlite3
 import glob
 import subprocess
+import sys
 from pathlib import Path
 import binascii
 import argparse
 from PIL import Image, ImageDraw
+
+# Add parent directory to path to import utils
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
+from utils.database import bulk_insert, BulkInsertOptimizer
 
 # Constants
 # Get the project root directory (parent of the script's directory)
@@ -781,7 +786,8 @@ def load_collision_data(conn):
                     tile_id = int(hex_val, 16)
                     collision_data[current_coll].append(tile_id)
 
-        # Insert the parsed collision data into the database
+        # Insert the parsed collision data into the database using bulk insert
+        collision_tiles_data = []
         for coll_name, tile_ids in collision_data.items():
             if coll_name in collision_to_tileset:
                 tileset_info = collision_to_tileset[coll_name]
@@ -789,13 +795,16 @@ def load_collision_data(conn):
                 tileset_name = tileset_info["name"]
 
                 for tile_id in tile_ids:
-                    cursor.execute(
-                        """
-                        INSERT INTO collision_tiles (tileset_id, tileset_name, tile_id)
-                        VALUES (?, ?, ?)
-                        """,
-                        (tileset_id, tileset_name, tile_id),
-                    )
+                    collision_tiles_data.append((tileset_id, tileset_name, tile_id))
+
+        if collision_tiles_data:
+            bulk_insert(
+                conn,
+                'collision_tiles',
+                ['tileset_id', 'tileset_name', 'tile_id'],
+                collision_tiles_data,
+                batch_size=1000
+            )
 
         conn.commit()
         print(f"Loaded collision data for {len(collision_data)} tilesets")
@@ -864,8 +873,11 @@ def main():
     map_data = extract_map_data()
     tileset_data = extract_tileset_data()
 
-    # Insert tileset data
+    # Insert tileset data using batch operations
     tileset_count = 0
+    all_blocksets_data = []
+    all_tileset_tiles_data = []
+
     for tileset_name, tileset_info in tileset_data.items():
         tileset_id = find_tileset_id(tileset_name, tileset_constants)
 
@@ -881,33 +893,48 @@ def main():
             )
             tileset_count += 1
 
-            # Parse and insert blockset data
+            # Parse and collect blockset data for batch insert
             blockset_path = tileset_info["blockset_path"]
             if os.path.exists(blockset_path):
                 blocks = parse_blockset_file(blockset_path)
                 for block_index, block_data in enumerate(blocks):
-                    cursor.execute(
-                        "INSERT INTO blocksets (tileset_id, block_index, block_data) VALUES (?, ?, ?)",
-                        (tileset_id, block_index, block_data),
-                    )
-                print(f"Inserted {len(blocks)} blocks for tileset {tileset_name}")
+                    all_blocksets_data.append((tileset_id, block_index, block_data))
+                print(f"Collected {len(blocks)} blocks for tileset {tileset_name}")
             else:
                 print(f"Warning: Blockset file not found: {blockset_path}")
 
-            # Parse and insert tileset tile data
+            # Parse and collect tileset tile data for batch insert
             tileset_2bpp_path = tileset_info["tileset_2bpp_path"]
             if tileset_2bpp_path and os.path.exists(tileset_2bpp_path):
                 tiles = parse_2bpp_file(tileset_2bpp_path)
                 for tile_index, tile_data in enumerate(tiles):
-                    cursor.execute(
-                        "INSERT INTO tileset_tiles (tileset_id, tile_index, tile_data) VALUES (?, ?, ?)",
-                        (tileset_id, tile_index, tile_data),
-                    )
-                print(f"Inserted {len(tiles)} tiles for tileset {tileset_name}")
+                    all_tileset_tiles_data.append((tileset_id, tile_index, tile_data))
+                print(f"Collected {len(tiles)} tiles for tileset {tileset_name}")
             else:
                 print(f"Warning: 2bpp file not found: {tileset_2bpp_path}")
         else:
             print(f"Warning: No tileset ID found for tileset {tileset_name}")
+
+    # Bulk insert blocksets and tileset_tiles
+    if all_blocksets_data:
+        print(f"Bulk inserting {len(all_blocksets_data)} blocksets...")
+        bulk_insert(
+            db_conn,
+            'blocksets',
+            ['tileset_id', 'block_index', 'block_data'],
+            all_blocksets_data,
+            batch_size=5000
+        )
+
+    if all_tileset_tiles_data:
+        print(f"Bulk inserting {len(all_tileset_tiles_data)} tileset tiles...")
+        bulk_insert(
+            db_conn,
+            'tileset_tiles',
+            ['tileset_id', 'tile_index', 'tile_data'],
+            all_tileset_tiles_data,
+            batch_size=5000
+        )
 
     print(f"Inserted {tileset_count} tilesets into database")
 
@@ -1029,12 +1056,14 @@ def main():
     print(f"Inserted {map_count} maps into database")
     print(f"Maps with matching tileset IDs: {tileset_match_count}")
 
-    # Populate tiles_raw table with raw tile data
+    # Populate tiles_raw table with raw tile data using optimized bulk insert
     print("Populating tiles_raw table...")
-    tiles_raw_count = 0
 
     # Clear existing data
     cursor.execute("DELETE FROM tiles_raw")
+
+    # Collect all tiles_raw data for bulk insert
+    tiles_raw_data = []
 
     # Process each map to extract raw tile data
     for map_name, map_info in map_constants.items():
@@ -1109,50 +1138,49 @@ def main():
                     # Determine if the block is walkable using the database
                     is_walkable = is_block_walkable(block_index, tileset_id, db_conn)
 
-                    # Insert into tiles_raw table
-                    cursor.execute(
-                        """
-                        INSERT INTO tiles_raw (map_id, x, y, block_index, tileset_id, is_overworld, is_walkable)
-                        VALUES (?, ?, ?, ?, ?, ?, ?)
-                        """,
-                        (
-                            map_id,
-                            x,
-                            y,
-                            block_index,
-                            tileset_id,
-                            1 if is_overworld else 0,
-                            1 if is_walkable else 0,
-                        ),
-                    )
-                    tiles_raw_count += 1
+                    # Collect data for bulk insert
+                    tiles_raw_data.append((
+                        map_id,
+                        x,
+                        y,
+                        block_index,
+                        tileset_id,
+                        1 if is_overworld else 0,
+                        1 if is_walkable else 0,
+                    ))
 
-                    # Commit every 1000 inserts to avoid transaction getting too large
-                    if tiles_raw_count % 1000 == 0:
-                        db_conn.commit()
-                        print(f"Inserted {tiles_raw_count} raw tiles so far...")
+    # Bulk insert all tiles_raw data with PRAGMA optimizations
+    if tiles_raw_data:
+        print(f"Bulk inserting {len(tiles_raw_data):,} raw tiles with optimizations...")
+        with BulkInsertOptimizer(db_conn):
+            bulk_insert(
+                db_conn,
+                'tiles_raw',
+                ['map_id', 'x', 'y', 'block_index', 'tileset_id', 'is_overworld', 'is_walkable'],
+                tiles_raw_data,
+                batch_size=10000  # Larger batch size for maximum performance
+            )
+        print(f"Inserted {len(tiles_raw_data):,} raw tiles into tiles_raw table")
 
-    db_conn.commit()
-    print(f"Inserted {tiles_raw_count} raw tiles into tiles_raw table")
-
-    # Insert map connections
-    connection_count = 0
-    for connection in map_connections:
-        cursor.execute(
-            """
-            INSERT INTO map_connections (from_map_id, to_map_id, direction, offset)
-            VALUES (?, ?, ?, ?)
-            """,
+    # Insert map connections using bulk insert
+    if map_connections:
+        map_connections_data = [
             (
                 connection["from_map_id"],
                 connection["to_map_id"],
                 connection["direction"],
                 connection["offset"],
-            ),
+            )
+            for connection in map_connections
+        ]
+        bulk_insert(
+            db_conn,
+            'map_connections',
+            ['from_map_id', 'to_map_id', 'direction', 'offset'],
+            map_connections_data,
+            batch_size=1000
         )
-        connection_count += 1
-
-    print(f"Inserted {connection_count} map connections into database")
+        print(f"Inserted {len(map_connections)} map connections into database")
 
     # Add a special table to store overworld map positioning information
     cursor.execute("DROP TABLE IF EXISTS overworld_map_positions")
