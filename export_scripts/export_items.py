@@ -2,7 +2,16 @@
 import os
 import re
 import sqlite3
+import sys
+import logging
 from pathlib import Path
+
+# Add the project root to the Python path
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
+from utils.validation import validate_item_data, log_validation_errors
+
+# Configure logging
+logging.basicConfig(level=logging.INFO, format='%(levelname)s: %(message)s')
 
 # Constants
 BASE_DIR = Path(
@@ -332,6 +341,8 @@ def main():
 
     # Insert items into database
     item_count = 0
+    validation_errors_count = 0
+
     for i, name in enumerate(item_names):
         item_id = i + 1  # Item IDs start at 1
         short_name = item_id_to_name.get(item_id, f"UNKNOWN_{item_id}")
@@ -357,6 +368,18 @@ def main():
 
         # Get move ID if it's a TM/HM
         move_id = tm_hm_moves.get(item_id)
+
+        # Validate item data before insertion
+        item_validation_data = {
+            "id": item_id,
+            "name": name,
+            "short_name": short_name,
+            "price": price_value,
+        }
+        errors = validate_item_data(item_validation_data)
+        if errors:
+            log_validation_errors(errors, f"Item {name}")
+            validation_errors_count += 1
 
         # Insert into database
         cursor.execute(
@@ -485,6 +508,8 @@ def main():
     conn.close()
 
     print(f"Successfully exported {item_count} items to pokemon.db")
+    if validation_errors_count > 0:
+        print(f"WARNING: Found validation errors in {validation_errors_count} items")
 
 
 if __name__ == "__main__":

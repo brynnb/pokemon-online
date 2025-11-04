@@ -2,7 +2,16 @@
 import os
 import re
 import sqlite3
+import sys
+import logging
 from pathlib import Path
+
+# Add the project root to the Python path
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
+from utils.validation import validate_object_data, log_validation_errors
+
+# Configure logging
+logging.basicConfig(level=logging.INFO, format='%(levelname)s: %(message)s')
 
 # Constants
 # Get the project root directory (parent of the script's directory)
@@ -291,8 +300,15 @@ def main():
     # Insert objects into database
     signs_count = 0
     sprites_count = 0
+    validation_errors_count = 0
 
     for obj in all_objects:
+        # Validate object data before insertion
+        errors = validate_object_data(obj)
+        if errors:
+            log_validation_errors(errors, f"Object {obj.get('name', 'UNKNOWN')}")
+            validation_errors_count += 1
+
         cursor.execute(
             """
         INSERT INTO objects (
@@ -329,6 +345,8 @@ def main():
     print(
         f"Successfully exported {len(all_objects)} objects to pokemon.db ({signs_count} signs, {sprites_count} sprites)"
     )
+    if validation_errors_count > 0:
+        print(f"WARNING: Found validation errors in {validation_errors_count} objects")
     print(
         "Note: Run update_object_coordinates.py to update global coordinates (x, y) based on local coordinates (local_x, local_y)"
     )

@@ -2,7 +2,16 @@
 import os
 import re
 import sqlite3
+import sys
+import logging
 from pathlib import Path
+
+# Add the project root to the Python path
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
+from utils.validation import validate_move_data, log_validation_errors
+
+# Configure logging
+logging.basicConfig(level=logging.INFO, format='%(levelname)s: %(message)s')
 
 # Constants
 # Get the project root directory (parent of the script's directory)
@@ -298,6 +307,8 @@ def main():
     battle_animations = parse_battle_animations()
 
     # Insert data into database
+    validation_errors_count = 0
+
     for move_name, move_data in moves_data.items():
         # Get the move ID from the constants
         move_id = move_constants.get(move_name, 0)
@@ -343,6 +354,20 @@ def main():
         # Get the type for this move
         type_name = move_data["type"]
 
+        # Validate move data before insertion
+        move_validation_data = {
+            "id": move_id,
+            "name": name,
+            "power": move_data["power"],
+            "accuracy": move_data["accuracy"],
+            "pp": move_data["pp"],
+            "type": type_name,
+        }
+        errors = validate_move_data(move_validation_data)
+        if errors:
+            log_validation_errors(errors, f"Move {name}")
+            validation_errors_count += 1
+
         cursor.execute(
             """
             INSERT INTO moves (
@@ -380,6 +405,8 @@ def main():
 
     # Log number of moves exported
     print(f"Successfully exported {len(moves_data)} moves to pokemon.db")
+    if validation_errors_count > 0:
+        print(f"WARNING: Found validation errors in {validation_errors_count} moves")
 
 
 if __name__ == "__main__":

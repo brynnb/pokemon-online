@@ -2,8 +2,17 @@
 import os
 import re
 import sqlite3
+import sys
+import logging
 from pathlib import Path
 from collections import defaultdict
+
+# Add the project root to the Python path
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
+from utils.validation import validate_warp_data, log_validation_errors
+
+# Configure logging
+logging.basicConfig(level=logging.INFO, format='%(levelname)s: %(message)s')
 
 # Constants
 # Get the project root directory (parent of the script's directory)
@@ -549,7 +558,14 @@ def main():
 
     # Insert warps into database
     inserted_count = 0
+    validation_errors_count = 0
+
     for warp in resolved_warps:
+        # Validate warp data before insertion
+        errors = validate_warp_data(warp)
+        if errors:
+            log_validation_errors(errors, f"Warp from {warp.get('source_map', 'UNKNOWN')}")
+            validation_errors_count += 1
         # Calculate global coordinates for overworld warps
         x = None
         y = None
@@ -615,6 +631,8 @@ def main():
     # Final commit
     conn.commit()
     print(f"Final commit: Successfully exported {inserted_count} warps to pokemon.db")
+    if validation_errors_count > 0:
+        print(f"WARNING: Found validation errors in {validation_errors_count} warps")
 
     # Close the database connection
     conn.close()

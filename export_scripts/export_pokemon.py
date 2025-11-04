@@ -4,10 +4,15 @@ import sqlite3
 import glob
 from pathlib import Path
 import sys
+import logging
 
 # Add the root directory to the Python path to allow imports from utils
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 from utils.pokemon_utils import SPECIAL_NAME_MAPPINGS, normalize_pokemon_name
+from utils.validation import validate_pokemon_data, log_validation_errors
+
+# Configure logging
+logging.basicConfig(level=logging.INFO, format='%(levelname)s: %(message)s')
 
 # Constants
 # Get the project root directory (parent of the script's directory)
@@ -407,6 +412,8 @@ def main():
     palettes = extract_palettes()
 
     # Insert data into database
+    validation_errors_count = 0
+
     for name, dex_num in pokemon_dex.items():
         if name in base_stats:
             # Prepare data for insertion
@@ -442,6 +449,12 @@ def main():
                 "palette_type": palettes.get(name),
             }
 
+            # Validate pokemon data before insertion
+            errors = validate_pokemon_data(pokemon_data)
+            if errors:
+                log_validation_errors(errors, f"Pokemon {name}")
+                validation_errors_count += 1
+
             # Insert into database
             cursor.execute(
                 """
@@ -465,6 +478,8 @@ def main():
     conn.close()
 
     print(f"Exported data for {len(pokemon_dex)} Pokémon to pokemon.db")
+    if validation_errors_count > 0:
+        print(f"WARNING: Found validation errors in {validation_errors_count} Pokémon")
 
 
 if __name__ == "__main__":

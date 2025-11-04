@@ -31,7 +31,16 @@ import subprocess
 from pathlib import Path
 import binascii
 import argparse
+import sys
 from PIL import Image, ImageDraw
+
+# Add the project root to the Python path
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
+from utils.validation import validate_map_data, validate_tileset_data, log_validation_errors
+import logging
+
+# Configure logging
+logging.basicConfig(level=logging.INFO, format='%(levelname)s: %(message)s')
 
 # Constants
 # Get the project root directory (parent of the script's directory)
@@ -866,8 +875,22 @@ def main():
 
     # Insert tileset data
     tileset_count = 0
+    tileset_validation_errors = 0
+
     for tileset_name, tileset_info in tileset_data.items():
         tileset_id = find_tileset_id(tileset_name, tileset_constants)
+
+        # Validate tileset data
+        tileset_validation_data = {
+            "name": tileset_name,
+            "tileset_id": tileset_id,
+            "blockset_path": tileset_info["blockset_path"],
+            "tileset_path": tileset_info["tileset_png_path"],
+        }
+        errors = validate_tileset_data(tileset_validation_data)
+        if errors:
+            log_validation_errors(errors, f"Tileset {tileset_name}")
+            tileset_validation_errors += 1
 
         if tileset_id is not None:
             cursor.execute(
@@ -943,6 +966,8 @@ def main():
     # Insert map data
     map_count = 0
     tileset_match_count = 0
+    validation_errors_count = 0
+
     for map_name, map_info in map_constants.items():
         map_id = map_info["id"]
 
@@ -968,6 +993,19 @@ def main():
         blk_data = None
         if blk_name:
             blk_data = map_data[blk_name]["blk_data"]
+
+        # Validate map data before insertion
+        map_validation_data = {
+            "name": map_name,
+            "width": map_info["width"],
+            "height": map_info["height"],
+            "tileset_id": tileset_id,
+            "blk_data": blk_data,
+        }
+        errors = validate_map_data(map_validation_data)
+        if errors:
+            log_validation_errors(errors, f"Map {map_name}")
+            validation_errors_count += 1
 
         # Check if this is an overworld map (tileset_id = 0)
         is_overworld = tileset_id == 0
@@ -1171,6 +1209,10 @@ def main():
     db_conn.close()
 
     print("Map data exported to pokemon.db successfully!")
+    if validation_errors_count > 0:
+        print(f"WARNING: Found validation errors in {validation_errors_count} maps")
+    if tileset_validation_errors > 0:
+        print(f"WARNING: Found validation errors in {tileset_validation_errors} tilesets")
 
 
 if __name__ == "__main__":
