@@ -3,6 +3,7 @@ import os
 import re
 import sqlite3
 from pathlib import Path
+from tqdm import tqdm
 
 # Constants
 BASE_DIR = Path(
@@ -332,7 +333,7 @@ def main():
 
     # Insert items into database
     item_count = 0
-    for i, name in enumerate(item_names):
+    for i, name in enumerate(tqdm(item_names, desc="Inserting items")):
         item_id = i + 1  # Item IDs start at 1
         short_name = item_id_to_name.get(item_id, f"UNKNOWN_{item_id}")
         price = item_prices[i]
@@ -401,7 +402,7 @@ def main():
 
     # Add HM items (HM01-HM05)
     hm_count = 0
-    for i in range(5):
+    for i in tqdm(range(5), desc="Adding HM items"):
         original_item_id = 0xC4 + i  # HMs start at 0xC4
         hm_number = i + 1
         move_id = tm_hm_moves.get(original_item_id)
@@ -439,7 +440,7 @@ def main():
 
     # Add TM items (TM01-TM50)
     tm_count = 0
-    for i in range(50):
+    for i in tqdm(range(50), desc="Adding TM items"):
         original_item_id = 0xC9 + i  # TMs start at 0xC9
         tm_number = i + 1
         move_id = tm_hm_moves.get(original_item_id)

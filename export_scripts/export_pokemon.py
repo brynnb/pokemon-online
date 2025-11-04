@@ -4,6 +4,7 @@ import sqlite3
 import glob
 from pathlib import Path
 import sys
+from tqdm import tqdm
 
 # Add the root directory to the Python path to allow imports from utils
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
@@ -104,8 +105,9 @@ def load_pokedex_constants():
 def extract_base_stats():
     """Extract base stats from all Pokémon base stats files."""
     pokemon_stats = {}
+    stats_files = list(glob.glob(f"{BASE_STATS_DIR}/*.asm"))
 
-    for stats_file in glob.glob(f"{BASE_STATS_DIR}/*.asm"):
+    for stats_file in tqdm(stats_files, desc="Extracting base stats"):
         pokemon_name = os.path.basename(stats_file).replace(".asm", "")
         normalized_name = normalize_pokemon_name(pokemon_name)
 
@@ -407,7 +409,7 @@ def main():
     palettes = extract_palettes()
 
     # Insert data into database
-    for name, dex_num in pokemon_dex.items():
+    for name, dex_num in tqdm(pokemon_dex.items(), desc="Inserting Pokemon data"):
         if name in base_stats:
             # Prepare data for insertion
             pokemon_data = {

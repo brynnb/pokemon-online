@@ -32,6 +32,7 @@ from pathlib import Path
 import binascii
 import argparse
 from PIL import Image, ImageDraw
+from tqdm import tqdm
 
 # Constants
 # Get the project root directory (parent of the script's directory)
@@ -866,7 +867,7 @@ def main():
 
     # Insert tileset data
     tileset_count = 0
-    for tileset_name, tileset_info in tileset_data.items():
+    for tileset_name, tileset_info in tqdm(tileset_data.items(), desc="Processing tilesets"):
         tileset_id = find_tileset_id(tileset_name, tileset_constants)
 
         if tileset_id is not None:
@@ -943,7 +944,7 @@ def main():
     # Insert map data
     map_count = 0
     tileset_match_count = 0
-    for map_name, map_info in map_constants.items():
+    for map_name, map_info in tqdm(map_constants.items(), desc="Inserting maps"):
         map_id = map_info["id"]
 
         # Find the corresponding map header
@@ -1037,7 +1038,7 @@ def main():
     cursor.execute("DELETE FROM tiles_raw")
 
     # Process each map to extract raw tile data
-    for map_name, map_info in map_constants.items():
+    for map_name, map_info in tqdm(map_constants.items(), desc="Processing maps for tile data"):
         map_id = map_info["id"]
         width = map_info["width"]
         height = map_info["height"]
@@ -1130,7 +1131,6 @@ def main():
                     # Commit every 1000 inserts to avoid transaction getting too large
                     if tiles_raw_count % 1000 == 0:
                         db_conn.commit()
-                        print(f"Inserted {tiles_raw_count} raw tiles so far...")
 
     db_conn.commit()
     print(f"Inserted {tiles_raw_count} raw tiles into tiles_raw table")

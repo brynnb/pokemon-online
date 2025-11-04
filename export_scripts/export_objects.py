@@ -3,6 +3,7 @@ import os
 import re
 import sqlite3
 from pathlib import Path
+from tqdm import tqdm
 
 # Constants
 # Get the project root directory (parent of the script's directory)
@@ -281,7 +282,7 @@ def main():
     all_objects = []
     processed_count = 0
 
-    for file_path in map_files:
+    for file_path in tqdm(map_files, desc="Processing map files for objects"):
         objects = process_map_file(file_path, cursor)
         all_objects.extend(objects)
         processed_count += 1
@@ -292,7 +293,7 @@ def main():
     signs_count = 0
     sprites_count = 0
 
-    for obj in all_objects:
+    for obj in tqdm(all_objects, desc="Inserting objects into database"):
         cursor.execute(
             """
         INSERT INTO objects (

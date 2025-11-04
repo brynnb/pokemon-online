@@ -23,6 +23,7 @@ import time
 import hashlib
 import io
 import re
+from tqdm import tqdm
 
 # Constants
 # Get the project root directory (parent of the script's directory)
@@ -167,10 +168,7 @@ def extract_tile_images(conn):
     # Dictionary to map (tileset_id, block_index, position) to tile_image_id
     block_pos_to_image_id = {}
 
-    for i, (tileset_id, tileset_name) in enumerate(tilesets, 1):
-        # Update progress
-        sys.stdout.write(f"\rProcessing tileset {i}/{total_tilesets}: {tileset_name}")
-        sys.stdout.flush()
+    for tileset_id, tileset_name in tqdm(tilesets, desc="Processing tilesets"):
 
         # Special case: Map DOJO (tileset ID 5) to GYM (tileset ID 7)
         # This is because in the original game, DOJO uses the same graphics as GYM
@@ -395,20 +393,14 @@ def populate_tiles(conn, block_pos_to_image_id):
             map_positions[map_name] = (x_offset, y_offset)
 
     # Process each map
-    for i, (
+    for (
         map_id,
         map_name,
         width,
         height,
         tileset_id,
         is_overworld,
-    ) in enumerate(maps, 1):
-        # Update progress every 5 maps
-        if i % 5 == 0 or i == total_maps:
-            sys.stdout.write(
-                f"\rProcessed {i}/{total_maps} maps, created {tile_count} tiles"
-            )
-            sys.stdout.flush()
+    ) in tqdm(maps, desc="Processing maps"):
 
         processed_maps += 1
 

@@ -4,6 +4,7 @@ import re
 import sqlite3
 from pathlib import Path
 from collections import defaultdict
+from tqdm import tqdm
 
 # Constants
 # Get the project root directory (parent of the script's directory)
@@ -515,7 +516,7 @@ def main():
     all_warps = []
     processed_count = 0
 
-    for file_path in map_files:
+    for file_path in tqdm(map_files, desc="Processing map files for warps"):
         map_name = parse_map_name_from_file(file_path)
         if not map_name:
             continue
@@ -549,7 +550,7 @@ def main():
 
     # Insert warps into database
     inserted_count = 0
-    for warp in resolved_warps:
+    for warp in tqdm(resolved_warps, desc="Inserting warps into database"):
         # Calculate global coordinates for overworld warps
         x = None
         y = None

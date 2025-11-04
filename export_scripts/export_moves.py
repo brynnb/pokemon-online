@@ -3,6 +3,7 @@ import os
 import re
 import sqlite3
 from pathlib import Path
+from tqdm import tqdm
 
 # Constants
 # Get the project root directory (parent of the script's directory)
@@ -298,7 +299,7 @@ def main():
     battle_animations = parse_battle_animations()
 
     # Insert data into database
-    for move_name, move_data in moves_data.items():
+    for move_name, move_data in tqdm(moves_data.items(), desc="Inserting moves data"):
         # Get the move ID from the constants
         move_id = move_constants.get(move_name, 0)
         if move_id == 0:
