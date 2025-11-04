@@ -4,6 +4,7 @@ import re
 import sqlite3
 from pathlib import Path
 from collections import defaultdict
+import argparse
 
 # Constants
 # Get the project root directory (parent of the script's directory)
@@ -31,8 +32,11 @@ CITIES_AND_TOWNS = [
 ROUTES = [f"Route{i}" for i in range(1, 26)]
 
 
-def create_database():
+def create_database(dry_run=False):
     """Connect to SQLite database and create warps table if it doesn't exist"""
+    if dry_run:
+        print("DRY RUN: Would create database connection to", DB_PATH)
+        return None, None
     conn = sqlite3.connect(DB_PATH)
     cursor = conn.cursor()
 
@@ -468,9 +472,23 @@ def resolve_last_map_warps(all_warps, cursor, map_to_map_id, map_formats):
     return resolved_warps
 
 
-def main():
+def main(dry_run=False):
+    if dry_run:
+        print("=" * 60)
+        print("DRY RUN MODE - No database changes will be made")
+        print("=" * 60)
+        print()
+
     # Create database
-    conn, cursor = create_database()
+    conn, cursor = create_database(dry_run)
+
+    if dry_run:
+        # Get all map files
+        map_files = list(POKEMON_DATA_DIR.glob("*.asm"))
+        print(f"\nDRY RUN SUMMARY:")
+        print(f"  - Would process {len(map_files)} map files")
+        print("\nDRY RUN: No changes were made to the database")
+        return
 
     # Get map formats from maps table
     map_formats = {}
@@ -682,4 +700,10 @@ def get_map_global_coordinates(cursor, map_id):
 
 
 if __name__ == "__main__":
-    main()
+    parser = argparse.ArgumentParser(
+        description="Export warp data to a database"
+    )
+    parser.add_argument('--dry-run', action='store_true',
+                       help='Parse data but do not write to database')
+    args = parser.parse_args()
+    main(dry_run=args.dry_run)

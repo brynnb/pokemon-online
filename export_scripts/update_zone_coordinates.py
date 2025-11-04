@@ -24,12 +24,13 @@ breadth-first order, ensuring that each map's coordinates are updated relative t
 its connected maps that have already been processed.
 
 Usage:
-    python update_zone_coordinates.py
+    python update_zone_coordinates.py [--dry-run]
 """
 
 import sqlite3
 import time
 from pathlib import Path
+import argparse
 
 # Constants
 # Get the project root directory (parent of the script's directory)
@@ -52,8 +53,12 @@ def get_map_dimensions(cursor, map_id):
     return cursor.fetchone()
 
 
-def update_map_coordinates(conn, map_id, x_offset, y_offset):
+def update_map_coordinates(conn, map_id, x_offset, y_offset, dry_run=False):
     """Update the coordinates of a map by applying the given offsets"""
+    if dry_run:
+        print(f"DRY RUN: Would update map {map_id} with offsets ({x_offset}, {y_offset})")
+        return 0
+
     cursor = conn.cursor()
 
     # Update the coordinates
@@ -185,7 +190,7 @@ def get_all_map_names(cursor):
     return {row[0]: row[1] for row in cursor.fetchall()}
 
 
-def process_map_connections(conn):
+def process_map_connections(conn, dry_run=False):
     """Process all map connections"""
     cursor = conn.cursor()
 
@@ -208,11 +213,11 @@ def process_map_connections(conn):
         min_x, min_y = cursor.fetchone()
 
         # Reset to (0,0)
-        update_map_coordinates(conn, current_map_id, -min_x, -min_y)
+        update_map_coordinates(conn, current_map_id, -min_x, -min_y, dry_run)
 
         # Then apply the calculated offsets
         updated_tiles = update_map_coordinates(
-            conn, current_map_id, current_x_offset, current_y_offset
+            conn, current_map_id, current_x_offset, current_y_offset, dry_run
         )
         map_name = get_map_name(cursor, current_map_id)
         print(
@@ -278,8 +283,14 @@ def process_map_connections(conn):
     return processed_maps
 
 
-def main():
+def main(dry_run=False):
     """Main function"""
+    if dry_run:
+        print("=" * 60)
+        print("DRY RUN MODE - No database changes will be made")
+        print("=" * 60)
+        print()
+
     start_time = time.time()
 
     # Connect to the database
@@ -288,7 +299,13 @@ def main():
 
     try:
         # Process map connections
-        processed_maps = process_map_connections(conn)
+        processed_maps = process_map_connections(conn, dry_run)
+
+        if dry_run:
+            print(f"\nDRY RUN SUMMARY:")
+            print(f"  - Would process {len(processed_maps)} maps")
+            print("\nDRY RUN: No changes were made to the database")
+            return
 
         # Verify the results
         print("\nFinal coordinates:")
@@ -311,4 +328,10 @@ def main():
 
 
 if __name__ == "__main__":
-    main()
+    parser = argparse.ArgumentParser(
+        description="Update zone coordinates in the database"
+    )
+    parser.add_argument('--dry-run', action='store_true',
+                       help='Parse data but do not write to database')
+    args = parser.parse_args()
+    main(dry_run=args.dry_run)

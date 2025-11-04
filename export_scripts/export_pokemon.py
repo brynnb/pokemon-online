@@ -4,6 +4,7 @@ import sqlite3
 import glob
 from pathlib import Path
 import sys
+import argparse
 
 # Add the root directory to the Python path to allow imports from utils
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
@@ -37,8 +38,11 @@ CRY_PATTERN = re.compile(r"\s*mon_cry [^,]+, \$([0-9A-F]+), \$([0-9A-F]+) ; (.+)
 # Special character name mappings - Removed and imported from utils.pokemon_utils
 
 
-def create_database():
+def create_database(dry_run=False):
     """Create SQLite database and tables"""
+    if dry_run:
+        print("DRY RUN: Would create database connection to", DB_PATH)
+        return None, None
     conn = sqlite3.connect(DB_PATH)
     cursor = conn.cursor()
 
@@ -390,9 +394,15 @@ def extract_palettes():
     return palettes
 
 
-def main():
+def main(dry_run=False):
+    if dry_run:
+        print("=" * 60)
+        print("DRY RUN MODE - No database changes will be made")
+        print("=" * 60)
+        print()
+
     # Create database
-    conn, cursor = create_database()
+    conn, cursor = create_database(dry_run)
 
     # Load Pokédex constants
     pokemon_dex, dex_to_name = load_pokedex_constants()
@@ -405,6 +415,19 @@ def main():
     evolutions = extract_evolutions()
     menu_icons = extract_menu_icons()
     palettes = extract_palettes()
+
+    if dry_run:
+        print(f"\nDRY RUN SUMMARY:")
+        print(f"  - Would process {len(pokemon_dex)} Pokémon")
+        print(f"  - Would process {len(base_stats)} base stats")
+        print(f"  - Would process {len(cries)} cries")
+        print(f"  - Would process {len(dex_entries)} dex entries")
+        print(f"  - Would process {len(dex_text)} dex text entries")
+        print(f"  - Would process {len(evolutions)} evolution entries")
+        print(f"  - Would process {len(menu_icons)} menu icons")
+        print(f"  - Would process {len(palettes)} palettes")
+        print("\nDRY RUN: No changes were made to the database")
+        return
 
     # Insert data into database
     for name, dex_num in pokemon_dex.items():
@@ -468,4 +491,10 @@ def main():
 
 
 if __name__ == "__main__":
-    main()
+    parser = argparse.ArgumentParser(
+        description="Export Pokémon data to a database"
+    )
+    parser.add_argument('--dry-run', action='store_true',
+                       help='Parse data but do not write to database')
+    args = parser.parse_args()
+    main(dry_run=args.dry_run)

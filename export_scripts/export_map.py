@@ -55,8 +55,11 @@ TILESET_CONST_PATTERN = re.compile(r"\s*const\s+(\w+)(?:\s*;.*)?$")
 CONNECTION_PATTERN = re.compile(r"\s*connection\s+(\w+),\s+(\w+),\s+(\w+),\s+(-?\d+)")
 
 
-def create_database():
+def create_database(dry_run=False):
     """Create SQLite database and tables for map data"""
+    if dry_run:
+        print("DRY RUN: Would create database connection to", DB_PATH)
+        return None
     conn = sqlite3.connect(DB_PATH)
     cursor = conn.cursor()
 
@@ -846,12 +849,39 @@ def is_block_walkable(block_index, tileset_id, conn):
     return True
 
 
-def main():
+def main(dry_run=False):
+    if dry_run:
+        print("=" * 60)
+        print("DRY RUN MODE - No database changes will be made")
+        print("=" * 60)
+        print()
+
     # Ensure 2bpp files exist
-    ensure_2bpp_files_exist()
+    if not dry_run:
+        ensure_2bpp_files_exist()
+    else:
+        print("DRY RUN: Would ensure 2bpp files exist")
 
     # Create database
-    db_conn = create_database()
+    db_conn = create_database(dry_run)
+    if dry_run:
+        print("DRY RUN: Skipping database operations\n")
+        # Still load and parse data to validate
+        map_constants = load_map_constants()
+        tileset_constants = load_tileset_constants()
+        map_headers, map_to_constant, map_connections = extract_map_headers()
+        map_data = extract_map_data()
+        tileset_data = extract_tileset_data()
+        print(f"\nDRY RUN SUMMARY:")
+        print(f"  - Would process {len(map_constants)} map constants")
+        print(f"  - Would process {len(tileset_constants)} tileset constants")
+        print(f"  - Would process {len(map_headers)} map headers")
+        print(f"  - Would process {len(map_data)} map data files")
+        print(f"  - Would process {len(tileset_data)} tileset data files")
+        print(f"  - Would insert {len(map_connections)} map connections")
+        print("\nDRY RUN: No changes were made to the database")
+        return
+
     cursor = db_conn.cursor()
 
     # Load collision data
@@ -1177,5 +1207,7 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(
         description="Export Pokémon map data to a database"
     )
+    parser.add_argument('--dry-run', action='store_true',
+                       help='Parse data but do not write to database')
     args = parser.parse_args()
-    main()
+    main(dry_run=args.dry_run)

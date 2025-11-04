@@ -3,6 +3,7 @@ import os
 import re
 import sqlite3
 from pathlib import Path
+import argparse
 
 # Constants
 BASE_DIR = Path(
@@ -13,8 +14,11 @@ CONSTANTS_DIR = BASE_DIR / "pokemon-game-data/constants"
 MOVES_DATA_DIR = BASE_DIR / "pokemon-game-data/data/moves"
 
 
-def create_database():
+def create_database(dry_run=False):
     """Create SQLite database and tables"""
+    if dry_run:
+        print("DRY RUN: Would create database connection to", BASE_DIR / "pokemon.db")
+        return None, None
     # Use the database in the project root
     conn = sqlite3.connect(BASE_DIR / "pokemon.db")
     cursor = conn.cursor()
@@ -307,9 +311,15 @@ def is_item_usable(item_name, overworld_items, party_menu_items):
     return item_name in overworld_items or item_name in party_menu_items
 
 
-def main():
+def main(dry_run=False):
+    if dry_run:
+        print("=" * 60)
+        print("DRY RUN MODE - No database changes will be made")
+        print("=" * 60)
+        print()
+
     # Create database
-    conn, cursor = create_database()
+    conn, cursor = create_database(dry_run)
 
     # Parse data
     item_constants = parse_item_constants()
@@ -321,6 +331,20 @@ def main():
     guard_drink_items = parse_guard_drink_items()
     vending_prices = parse_vending_prices()
     tm_hm_moves = parse_tm_hm_moves()
+
+    if dry_run:
+        print(f"\nDRY RUN SUMMARY:")
+        print(f"  - Would process {len(item_constants)} item constants")
+        print(f"  - Would process {len(item_names)} item names")
+        print(f"  - Would process {len(item_prices)} item prices")
+        print(f"  - Would process {len(key_items_data)} key items")
+        print(f"  - Would process {len(party_menu_items)} party menu items")
+        print(f"  - Would process {len(overworld_items)} overworld items")
+        print(f"  - Would process {len(guard_drink_items)} guard drink items")
+        print(f"  - Would process {len(vending_prices)} vending prices")
+        print(f"  - Would process {len(tm_hm_moves)} TM/HM moves")
+        print("\nDRY RUN: No changes were made to the database")
+        return
 
     # Create reverse mapping for item constants
     item_id_to_name = {v: k for k, v in item_constants.items()}
@@ -488,4 +512,10 @@ def main():
 
 
 if __name__ == "__main__":
-    main()
+    parser = argparse.ArgumentParser(
+        description="Export item data to a database"
+    )
+    parser.add_argument('--dry-run', action='store_true',
+                       help='Parse data but do not write to database')
+    args = parser.parse_args()
+    main(dry_run=args.dry_run)

@@ -3,6 +3,7 @@ import os
 import re
 import sqlite3
 from pathlib import Path
+import argparse
 
 # Constants
 # Get the project root directory (parent of the script's directory)
@@ -32,8 +33,11 @@ TYPE_MAPPING = {
 }
 
 
-def create_database():
+def create_database(dry_run=False):
     """Create SQLite database and tables"""
+    if dry_run:
+        print("DRY RUN: Would create database connection to", DB_PATH)
+        return None
     conn = sqlite3.connect(DB_PATH)
     cursor = conn.cursor()
 
@@ -284,10 +288,15 @@ def parse_battle_animations():
     return battle_animations
 
 
-def main():
+def main(dry_run=False):
+    if dry_run:
+        print("=" * 60)
+        print("DRY RUN MODE - No database changes will be made")
+        print("=" * 60)
+        print()
+
     # Create database
-    conn = create_database()
-    cursor = conn.cursor()
+    conn = create_database(dry_run)
 
     # Parse data
     move_constants = parse_move_constants()
@@ -296,6 +305,19 @@ def main():
     move_sounds = parse_move_sounds()
     move_grammar = parse_move_grammar()
     battle_animations = parse_battle_animations()
+
+    if dry_run:
+        print(f"\nDRY RUN SUMMARY:")
+        print(f"  - Would process {len(move_constants)} move constants")
+        print(f"  - Would process {len(moves_data)} moves")
+        print(f"  - Would process {len(move_names)} move names")
+        print(f"  - Would process {len(move_sounds)} move sounds")
+        print(f"  - Would process {len(move_grammar)} move grammar entries")
+        print(f"  - Would process {len(battle_animations)} battle animations")
+        print("\nDRY RUN: No changes were made to the database")
+        return
+
+    cursor = conn.cursor()
 
     # Insert data into database
     for move_name, move_data in moves_data.items():
@@ -383,4 +405,10 @@ def main():
 
 
 if __name__ == "__main__":
-    main()
+    parser = argparse.ArgumentParser(
+        description="Export move data to a database"
+    )
+    parser.add_argument('--dry-run', action='store_true',
+                       help='Parse data but do not write to database')
+    args = parser.parse_args()
+    main(dry_run=args.dry_run)

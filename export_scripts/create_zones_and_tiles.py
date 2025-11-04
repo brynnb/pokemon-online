@@ -10,7 +10,7 @@ The script:
 2. Extracts 16x16 pixel tile images from the existing tilesets
 
 Usage:
-    python create_zones_and_tiles.py
+    python create_zones_and_tiles.py [--dry-run]
 """
 
 import os
@@ -23,6 +23,7 @@ import time
 import hashlib
 import io
 import re
+import argparse
 
 # Constants
 # Get the project root directory (parent of the script's directory)
@@ -32,8 +33,11 @@ TILE_IMAGES_DIR = "tile_images"
 BATCH_SIZE = 1000  # Number of tiles to insert in a single batch
 
 
-def create_new_tables():
+def create_new_tables(dry_run=False):
     """Create new tiles and tile_images tables in the database"""
+    if dry_run:
+        print("DRY RUN: Would create new tiles and tile_images tables in", DB_PATH)
+        return None
     conn = sqlite3.connect(DB_PATH)
     cursor = conn.cursor()
 
@@ -566,12 +570,23 @@ def populate_tiles(conn, block_pos_to_image_id):
     )
 
 
-def main():
+def main(dry_run=False):
     """Main function"""
+    if dry_run:
+        print("=" * 60)
+        print("DRY RUN MODE - No database changes will be made")
+        print("=" * 60)
+        print()
+
     total_start_time = time.time()
 
     print("Creating new tables...")
-    conn = create_new_tables()
+    conn = create_new_tables(dry_run)
+
+    if dry_run:
+        print("DRY RUN: Would extract tile images and populate tiles table")
+        print("\nDRY RUN: No changes were made to the database")
+        return
 
     print("\nExtracting tile images...")
     block_pos_to_image_id = extract_tile_images(conn)
@@ -599,4 +614,10 @@ def main():
 
 
 if __name__ == "__main__":
-    main()
+    parser = argparse.ArgumentParser(
+        description="Create tiles and tile_images tables in the database"
+    )
+    parser.add_argument('--dry-run', action='store_true',
+                       help='Parse data but do not write to database')
+    args = parser.parse_args()
+    main(dry_run=args.dry_run)

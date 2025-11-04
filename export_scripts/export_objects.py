@@ -3,6 +3,7 @@ import os
 import re
 import sqlite3
 from pathlib import Path
+import argparse
 
 # Constants
 # Get the project root directory (parent of the script's directory)
@@ -18,8 +19,11 @@ OBJECT_TYPE_OBJECT = "npc"
 OBJECT_TYPE_ITEM = "item"
 
 
-def create_database():
+def create_database(dry_run=False):
     """Create SQLite database and objects table"""
+    if dry_run:
+        print("DRY RUN: Would create database connection to", DB_PATH)
+        return None, None
     conn = sqlite3.connect(DB_PATH)
     cursor = conn.cursor()
 
@@ -269,13 +273,25 @@ def process_map_file(file_path, cursor):
     return all_objects
 
 
-def main():
+def main(dry_run=False):
+    if dry_run:
+        print("=" * 60)
+        print("DRY RUN MODE - No database changes will be made")
+        print("=" * 60)
+        print()
+
     # Create database
-    conn, cursor = create_database()
+    conn, cursor = create_database(dry_run)
 
     # Get all map object files
     map_files = list(POKEMON_DATA_DIR.glob("*.asm"))
     print(f"Found {len(map_files)} map files")
+
+    if dry_run:
+        print(f"\nDRY RUN SUMMARY:")
+        print(f"  - Would process {len(map_files)} map files")
+        print("\nDRY RUN: No changes were made to the database")
+        return
 
     # Process each map file
     all_objects = []
@@ -335,4 +351,10 @@ def main():
 
 
 if __name__ == "__main__":
-    main()
+    parser = argparse.ArgumentParser(
+        description="Export object data to a database"
+    )
+    parser.add_argument('--dry-run', action='store_true',
+                       help='Parse data but do not write to database')
+    args = parser.parse_args()
+    main(dry_run=args.dry_run)
