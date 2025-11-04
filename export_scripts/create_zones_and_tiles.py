@@ -23,6 +23,7 @@ import time
 import hashlib
 import io
 import re
+import config
 
 # Constants
 # Get the project root directory (parent of the script's directory)
@@ -172,13 +173,8 @@ def extract_tile_images(conn):
         sys.stdout.write(f"\rProcessing tileset {i}/{total_tilesets}: {tileset_name}")
         sys.stdout.flush()
 
-        # Special case: Map DOJO (tileset ID 5) to GYM (tileset ID 7)
-        # This is because in the original game, DOJO uses the same graphics as GYM
-        query_tileset_id = 7 if tileset_id == 5 else tileset_id
-        # Special case: Map MART (tileset ID 2) to POKECENTER (tileset ID 6)
-        # This is because marts and pokecenters share similar interior graphics
-        if tileset_id == 2:
-            query_tileset_id = 6
+        # Get the aliased tileset ID if one exists
+        query_tileset_id = config.get_tileset_alias(tileset_id)
 
         # Get blockset data for this tileset
         cursor.execute(
@@ -274,14 +270,9 @@ def extract_tile_images(conn):
                     block_pos_to_image_id[(tileset_id, block_index, pos_index)] = (
                         existing_image_id
                     )
-                    # Special case: If this is the GYM tileset (ID 7), also store the mapping for DOJO (ID 5)
-                    if tileset_id == 7:
-                        block_pos_to_image_id[(5, block_index, pos_index)] = (
-                            existing_image_id
-                        )
-                    # Special case: If this is the POKECENTER tileset (ID 6), also store the mapping for MART (ID 2)
-                    if tileset_id == 6:
-                        block_pos_to_image_id[(2, block_index, pos_index)] = (
+                    # Store reverse aliases: if other tilesets alias to this one, also store the mapping for them
+                    for alias_id in config.get_reverse_aliases(tileset_id):
+                        block_pos_to_image_id[(alias_id, block_index, pos_index)] = (
                             existing_image_id
                         )
                     duplicate_count += 1
@@ -305,12 +296,9 @@ def extract_tile_images(conn):
                     block_pos_to_image_id[(tileset_id, block_index, pos_index)] = (
                         image_id
                     )
-                    # Special case: If this is the GYM tileset (ID 7), also store the mapping for DOJO (ID 5)
-                    if tileset_id == 7:
-                        block_pos_to_image_id[(5, block_index, pos_index)] = image_id
-                    # Special case: If this is the POKECENTER tileset (ID 6), also store the mapping for MART (ID 2)
-                    if tileset_id == 6:
-                        block_pos_to_image_id[(2, block_index, pos_index)] = image_id
+                    # Store reverse aliases: if other tilesets alias to this one, also store the mapping for them
+                    for alias_id in config.get_reverse_aliases(tileset_id):
+                        block_pos_to_image_id[(alias_id, block_index, pos_index)] = image_id
                     unique_image_count += 1
 
                 tile_image_count += 1
@@ -444,13 +432,8 @@ def populate_tiles(conn, block_pos_to_image_id):
             raw_is_overworld,
             raw_is_walkable,
         ) in raw_tiles:
-            # Special case: Map DOJO (tileset ID 5) to GYM (tileset ID 7)
-            # This is because in the original game, DOJO uses the same graphics as GYM
-            lookup_tileset_id = 7 if raw_tileset_id == 5 else raw_tileset_id
-            # Special case: Map MART (tileset ID 2) to POKECENTER (tileset ID 6)
-            # This is because marts and pokecenters share similar interior graphics
-            if raw_tileset_id == 2:
-                lookup_tileset_id = 6
+            # Get the aliased tileset ID if one exists
+            lookup_tileset_id = config.get_tileset_alias(raw_tileset_id)
 
             # Get the block data to check individual tiles
             cursor.execute(
