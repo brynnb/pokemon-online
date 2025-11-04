@@ -4,6 +4,14 @@ import re
 import sqlite3
 from pathlib import Path
 from collections import defaultdict
+import sys
+
+# Add the export_scripts directory to the path for local imports
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+from utils.logger import setup_logger, log_script_start, log_script_end
+
+# Set up logger
+logger = setup_logger(__name__)
 
 # Constants
 # Get the project root directory (parent of the script's directory)
@@ -464,7 +472,7 @@ def resolve_last_map_warps(all_warps, cursor, map_to_map_id, map_formats):
             # Not a LAST_MAP reference
             resolved_warps.append(warp)
 
-    print(f"Resolved {resolved_count} LAST_MAP warps")
+    logger.info(f"Resolved {resolved_count} LAST_MAP warps")
     return resolved_warps
 
 
@@ -481,7 +489,7 @@ def main():
             map_formats[map_name] = map_id
     except sqlite3.OperationalError:
         # If maps table doesn't exist, continue without it
-        print("Warning: 'maps' table not found, continuing without map formats")
+        logger.warning("'maps' table not found, continuing without map formats")
 
     # Create a map name to map ID mapping
     map_to_map_id = {}
@@ -505,11 +513,11 @@ def main():
                 map_to_map_id[map_name.replace("f", "F")] = map_id
     except sqlite3.OperationalError:
         # If maps table doesn't exist, continue without it
-        print("Warning: 'maps' table not found, continuing without map ID mapping")
+        logger.warning("'maps' table not found, continuing without map ID mapping")
 
     # Get all map files
     map_files = list(POKEMON_DATA_DIR.glob("*.asm"))
-    print(f"Found {len(map_files)} map files")
+    logger.info(f"Found {len(map_files)} map files")
 
     # Process each map file
     all_warps = []
@@ -540,7 +548,7 @@ def main():
         all_warps.extend(warps)
         processed_count += 1
 
-    print(f"Processed {processed_count} map files, found {len(all_warps)} warps")
+    logger.info(f"Processed {processed_count} map files, found {len(all_warps)} warps")
 
     # Resolve LAST_MAP references
     resolved_warps = resolve_last_map_warps(
@@ -610,11 +618,11 @@ def main():
         # Commit more frequently to ensure data is saved
         if inserted_count % 50 == 0:
             conn.commit()
-            print(f"Committed {inserted_count} warps so far")
+            logger.info(f"Committed {inserted_count} warps so far")
 
     # Final commit
     conn.commit()
-    print(f"Final commit: Successfully exported {inserted_count} warps to pokemon.db")
+    logger.info(f"Final commit: Successfully exported {inserted_count} warps to pokemon.db")
 
     # Close the database connection
     conn.close()
@@ -682,4 +690,11 @@ def get_map_global_coordinates(cursor, map_id):
 
 
 if __name__ == "__main__":
-    main()
+    log_script_start(logger, "export_warps.py")
+    try:
+        main()
+        log_script_end(logger, "export_warps.py", success=True)
+    except Exception as e:
+        logger.error(f"Script failed with error: {e}", exc_info=True)
+        log_script_end(logger, "export_warps.py", success=False)
+        raise

@@ -24,6 +24,13 @@ import hashlib
 import io
 import re
 
+# Add the parent directory to the path to import utils
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+from utils.logger import setup_logger, log_script_start, log_script_end
+
+# Set up logger
+logger = setup_logger(__name__)
+
 # Constants
 # Get the project root directory (parent of the script's directory)
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
@@ -137,14 +144,14 @@ def extract_tile_images(conn):
     os.makedirs(TILE_IMAGES_DIR, exist_ok=True)
 
     # Clean up old files
-    print("Cleaning up old tile images...")
+    logger.info("Cleaning up old tile images...")
     old_files = list(Path(TILE_IMAGES_DIR).glob("*.png"))
     for old_file in old_files:
         try:
             os.remove(old_file)
         except Exception as e:
-            print(f"Error removing {old_file}: {e}")
-    print(f"Removed {len(old_files)} old tile images")
+            logger.error(f"Error removing {old_file}: {e}")
+    logger.info(f"Removed {len(old_files)} old tile images")
 
     # Define GameBoy color palette (white, light gray, dark gray, black)
     palette = [(255, 255, 255), (192, 192, 192), (96, 96, 96), (0, 0, 0)]
@@ -158,7 +165,7 @@ def extract_tile_images(conn):
     duplicate_count = 0
     total_tilesets = len(tilesets)
 
-    print(f"Processing {total_tilesets} tilesets...")
+    logger.info(f"Processing {total_tilesets} tilesets...")
     start_time = time.time()
 
     # Dictionary to track image hashes and their corresponding IDs
@@ -321,10 +328,10 @@ def extract_tile_images(conn):
 
     conn.commit()
     elapsed_time = time.time() - start_time
-    print(f"\nProcessed {tile_image_count} tile images")
-    print(f"- Unique images: {unique_image_count}")
-    print(f"- Duplicate images: {duplicate_count}")
-    print(f"- Total time: {elapsed_time:.2f} seconds")
+    logger.info(f"Processed {tile_image_count} tile images")
+    logger.info(f"- Unique images: {unique_image_count}")
+    logger.info(f"- Duplicate images: {duplicate_count}")
+    logger.info(f"- Total time: {elapsed_time:.2f} seconds")
 
     return block_pos_to_image_id
 
@@ -334,7 +341,7 @@ def populate_tiles(conn, block_pos_to_image_id):
     cursor = conn.cursor()
 
     # Clear the tiles table before repopulating
-    print("Clearing existing tiles...")
+    logger.info("Clearing existing tiles...")
     cursor.execute("DELETE FROM tiles")
     conn.commit()
 
@@ -345,7 +352,7 @@ def populate_tiles(conn, block_pos_to_image_id):
     has_tiles_raw = cursor.fetchone() is not None
 
     if not has_tiles_raw:
-        print("Error: tiles_raw table does not exist. Please run export_map.py first.")
+        logger.error("tiles_raw table does not exist. Please run export_map.py first.")
         return
 
     # Check if the collision_tiles table exists
@@ -355,8 +362,8 @@ def populate_tiles(conn, block_pos_to_image_id):
     has_collision_tiles = cursor.fetchone() is not None
 
     if not has_collision_tiles:
-        print(
-            "Warning: collision_tiles table does not exist. Walkability data may be inaccurate."
+        logger.warning(
+            "collision_tiles table does not exist. Walkability data may be inaccurate."
         )
 
     # Get all maps with their is_overworld flag
@@ -370,7 +377,7 @@ def populate_tiles(conn, block_pos_to_image_id):
     maps = cursor.fetchall()
     total_maps = len(maps)
 
-    print(f"Processing {total_maps} maps...")
+    logger.info(f"Processing {total_maps} maps...")
     tile_count = 0
     processed_maps = 0
     skipped_maps = 0
@@ -561,8 +568,8 @@ def populate_tiles(conn, block_pos_to_image_id):
         conn.commit()
 
     elapsed_time = time.time() - start_time
-    print(
-        f"\nCreated {tile_count} tiles from {processed_maps} maps in {elapsed_time:.2f} seconds"
+    logger.info(
+        f"Created {tile_count} tiles from {processed_maps} maps in {elapsed_time:.2f} seconds"
     )
 
 
@@ -570,13 +577,13 @@ def main():
     """Main function"""
     total_start_time = time.time()
 
-    print("Creating new tables...")
+    logger.info("Creating new tables...")
     conn = create_new_tables()
 
-    print("\nExtracting tile images...")
+    logger.info("Extracting tile images...")
     block_pos_to_image_id = extract_tile_images(conn)
 
-    print("\nPopulating tiles table...")
+    logger.info("Populating tiles table...")
     populate_tiles(conn, block_pos_to_image_id)
 
     # Print summary
@@ -589,14 +596,21 @@ def main():
 
     total_elapsed_time = time.time() - total_start_time
 
-    print("\nSummary:")
-    print(f"- Extracted {tile_image_count} unique tile images")
-    print(f"- Created {tile_count} tiles")
-    print(f"- Total time: {total_elapsed_time:.2f} seconds")
+    logger.info("Summary:")
+    logger.info(f"- Extracted {tile_image_count} unique tile images")
+    logger.info(f"- Created {tile_count} tiles")
+    logger.info(f"- Total time: {total_elapsed_time:.2f} seconds")
 
-    print("\nDone!")
+    logger.info("Done!")
     conn.close()
 
 
 if __name__ == "__main__":
-    main()
+    log_script_start(logger, "create_zones_and_tiles.py")
+    try:
+        main()
+        log_script_end(logger, "create_zones_and_tiles.py", success=True)
+    except Exception as e:
+        logger.error(f"Script failed with error: {e}", exc_info=True)
+        log_script_end(logger, "create_zones_and_tiles.py", success=False)
+        raise

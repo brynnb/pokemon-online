@@ -3,6 +3,14 @@ import os
 import re
 import sqlite3
 from pathlib import Path
+import sys
+
+# Add the export_scripts directory to the path for local imports
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+from utils.logger import setup_logger, log_script_start, log_script_end
+
+# Set up logger
+logger = setup_logger(__name__)
 
 # Constants
 # Get the project root directory (parent of the script's directory)
@@ -251,7 +259,7 @@ def process_map_file(file_path, cursor):
     # Get map ID for this map
     map_id = get_map_id_for_map(map_name, cursor)
     if not map_id:
-        print(f"Warning: Could not find map ID for map {map_name}")
+        logger.warning(f"Could not find map ID for map {map_name}")
         return []
 
     with open(file_path, "r") as f:
@@ -275,7 +283,7 @@ def main():
 
     # Get all map object files
     map_files = list(POKEMON_DATA_DIR.glob("*.asm"))
-    print(f"Found {len(map_files)} map files")
+    logger.info(f"Found {len(map_files)} map files")
 
     # Process each map file
     all_objects = []
@@ -286,7 +294,7 @@ def main():
         all_objects.extend(objects)
         processed_count += 1
 
-    print(f"Processed {processed_count} map files, found {len(all_objects)} objects")
+    logger.info(f"Processed {processed_count} map files, found {len(all_objects)} objects")
 
     # Insert objects into database
     signs_count = 0
@@ -326,13 +334,20 @@ def main():
     conn.commit()
     conn.close()
 
-    print(
+    logger.info(
         f"Successfully exported {len(all_objects)} objects to pokemon.db ({signs_count} signs, {sprites_count} sprites)"
     )
-    print(
+    logger.info(
         "Note: Run update_object_coordinates.py to update global coordinates (x, y) based on local coordinates (local_x, local_y)"
     )
 
 
 if __name__ == "__main__":
-    main()
+    log_script_start(logger, "export_objects.py")
+    try:
+        main()
+        log_script_end(logger, "export_objects.py", success=True)
+    except Exception as e:
+        logger.error(f"Script failed with error: {e}", exc_info=True)
+        log_script_end(logger, "export_objects.py", success=False)
+        raise

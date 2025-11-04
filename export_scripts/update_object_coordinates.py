@@ -17,8 +17,17 @@ that match the global coordinate system of the tiles.
 """
 
 import sqlite3
+import sys
 import time
+import os
 from pathlib import Path
+
+# Add the parent directory to the path to import utils
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+from utils.logger import setup_logger, log_script_start, log_script_end
+
+# Set up logger
+logger = setup_logger(__name__)
 
 # Constants
 # Get the project root directory (parent of the script's directory)
@@ -90,8 +99,15 @@ def main():
     # Close the connection
     conn.close()
 
-    print(f"Successfully updated coordinates for {updated_count} objects")
+    logger.info(f"Successfully updated coordinates for {updated_count} objects")
 
 
 if __name__ == "__main__":
-    main()
+    log_script_start(logger, "update_object_coordinates.py")
+    try:
+        main()
+        log_script_end(logger, "update_object_coordinates.py", success=True)
+    except Exception as e:
+        logger.error(f"Script failed with error: {e}", exc_info=True)
+        log_script_end(logger, "update_object_coordinates.py", success=False)
+        raise

@@ -1,6 +1,14 @@
 import sqlite3
 import sys
+import os
 from pathlib import Path
+
+# Add the parent directory to the path to import utils
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+from utils.logger import setup_logger, log_script_start, log_script_end
+
+# Set up logger
+logger = setup_logger(__name__)
 
 # Get the project root directory (parent of the script's directory)
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
@@ -17,13 +25,13 @@ def update_overworld_tiles():
     overworld_maps = cursor.fetchall()
 
     if not overworld_maps:
-        print("No maps marked as overworld found in the database.")
+        logger.info("No maps marked as overworld found in the database.")
         conn.close()
         return
 
-    print(f"Found {len(overworld_maps)} maps marked as overworld:")
+    logger.info(f"Found {len(overworld_maps)} maps marked as overworld:")
     for map_id, map_name in overworld_maps:
-        print(f"  - Map {map_id}: {map_name}")
+        logger.info(f"  - Map {map_id}: {map_name}")
 
     # Count tiles in overworld maps
     cursor.execute(
@@ -35,11 +43,11 @@ def update_overworld_tiles():
     total_tiles = cursor.fetchone()[0]
 
     if total_tiles == 0:
-        print("No tiles found in overworld maps.")
+        logger.info("No tiles found in overworld maps.")
         conn.close()
         return
 
-    print(f"Found {total_tiles} tiles in overworld maps.")
+    logger.info(f"Found {total_tiles} tiles in overworld maps.")
 
     # Update tiles to mark them as overworld
     cursor.execute(
@@ -57,10 +65,17 @@ def update_overworld_tiles():
     cursor.execute("SELECT COUNT(*) FROM tiles WHERE is_overworld = 1")
     updated_tiles = cursor.fetchone()[0]
 
-    print(f"Updated {updated_tiles} tiles to be marked as overworld.")
+    logger.info(f"Updated {updated_tiles} tiles to be marked as overworld.")
 
     conn.close()
 
 
 if __name__ == "__main__":
-    update_overworld_tiles()
+    log_script_start(logger, "update_overworld_tiles.py")
+    try:
+        update_overworld_tiles()
+        log_script_end(logger, "update_overworld_tiles.py", success=True)
+    except Exception as e:
+        logger.error(f"Script failed with error: {e}", exc_info=True)
+        log_script_end(logger, "update_overworld_tiles.py", success=False)
+        raise

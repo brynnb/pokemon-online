@@ -3,6 +3,14 @@ import os
 import re
 import sqlite3
 from pathlib import Path
+import sys
+
+# Add the parent directory to the path to import utils
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+from utils.logger import setup_logger, log_script_start, log_script_end
+
+# Set up logger
+logger = setup_logger(__name__)
 
 # Constants
 # Get the project root directory (parent of the script's directory)
@@ -379,8 +387,15 @@ def main():
     conn.close()
 
     # Log number of moves exported
-    print(f"Successfully exported {len(moves_data)} moves to pokemon.db")
+    logger.info(f"Successfully exported {len(moves_data)} moves to pokemon.db")
 
 
 if __name__ == "__main__":
-    main()
+    log_script_start(logger, "export_moves.py")
+    try:
+        main()
+        log_script_end(logger, "export_moves.py", success=True)
+    except Exception as e:
+        logger.error(f"Script failed with error: {e}", exc_info=True)
+        log_script_end(logger, "export_moves.py", success=False)
+        raise

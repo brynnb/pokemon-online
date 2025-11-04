@@ -32,6 +32,14 @@ from pathlib import Path
 import binascii
 import argparse
 from PIL import Image, ImageDraw
+import sys
+
+# Add the parent directory to the path to import utils
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+from utils.logger import setup_logger, log_script_start, log_script_end
+
+# Set up logger
+logger = setup_logger(__name__)
 
 # Constants
 # Get the project root directory (parent of the script's directory)
@@ -200,7 +208,7 @@ def load_map_constants():
             "height": height,
         }
 
-    print(f"Loaded {len(map_constants)} map constants")
+    logger.info(f"Loaded {len(map_constants)} map constants")
     return map_constants
 
 
@@ -247,12 +255,12 @@ def load_tileset_constants():
                 ):  # Only break if we've found some constants
                     break
 
-    print(f"Loaded {len(tileset_constants)} tileset constants")
+    logger.info(f"Loaded {len(tileset_constants)} tileset constants")
 
     # Debug: Print all tileset constants
-    print("Tileset constants:")
+    logger.debug("Tileset constants:")
     for name, info in tileset_constants.items():
-        print(f"  {name}: {info['id']}")
+        logger.debug(f"  {name}: {info['id']}")
 
     return tileset_constants
 
@@ -322,21 +330,21 @@ def extract_map_headers():
                     }
                 )
 
-    print(f"Loaded {len(map_headers)} map headers")
-    print(f"Loaded {len(map_connections)} map connections")
+    logger.info(f"Loaded {len(map_headers)} map headers")
+    logger.info(f"Loaded {len(map_connections)} map connections")
 
     # Debug: Print some map headers with their tileset names
-    print("Sample map headers with tileset names:")
+    logger.debug("Sample map headers with tileset names:")
     count = 0
     for name, info in map_headers.items():
         if count < 5:
-            print(f"  {name}: {info['tileset']}")
+            logger.debug(f"  {name}: {info['tileset']}")
             count += 1
 
     # Debug: Print some map connections
-    print("Sample map connections:")
+    logger.debug("Sample map connections:")
     for i, conn in enumerate(map_connections[:5]):
-        print(
+        logger.debug(
             f"  {conn['from_map_name']} ({conn['from_map_id']}) -> {conn['to_map_name']} ({conn['to_map_id']}) [{conn['direction']}]"
         )
 
@@ -357,7 +365,7 @@ def extract_map_data():
         # Store the original blk_data
         map_data[map_name] = {"blk_data": blk_data}
 
-    print(f"Loaded {len(map_data)} map data files")
+    logger.info(f"Loaded {len(map_data)} map data files")
     return map_data
 
 
@@ -387,7 +395,7 @@ def ensure_2bpp_files_exist():
             png_file
         ) > os.path.getmtime(bpp_file):
             try:
-                print(f"Generating 2bpp file for {base_name}...")
+                logger.info(f"Generating 2bpp file for {base_name}...")
                 result = subprocess.run(
                     ["rgbgfx", "-o", bpp_file, png_file],
                     check=True,
@@ -396,14 +404,14 @@ def ensure_2bpp_files_exist():
                 )
                 generated_count += 1
             except subprocess.CalledProcessError as e:
-                print(f"Error generating 2bpp file for {base_name}: {e}")
-                print(f"stdout: {e.stdout}")
-                print(f"stderr: {e.stderr}")
+                logger.error(f"Error generating 2bpp file for {base_name}: {e}")
+                logger.error(f"stdout: {e.stdout}")
+                logger.error(f"stderr: {e.stderr}")
             except FileNotFoundError:
-                print("rgbgfx tool not found. Please install RGBDS tools.")
+                logger.error("rgbgfx tool not found. Please install RGBDS tools.")
                 break
 
-    print(f"Generated {generated_count} 2bpp files")
+    logger.info(f"Generated {generated_count} 2bpp files")
     return generated_count
 
 
@@ -429,7 +437,7 @@ def extract_tileset_data():
             "tileset_2bpp_path": tileset_2bpp if has_2bpp else None,
         }
 
-    print(f"Loaded {len(tileset_data)} tileset data files")
+    logger.info(f"Loaded {len(tileset_data)} tileset data files")
     return tileset_data
 
 
@@ -512,7 +520,7 @@ def parse_blockset_file(blockset_path):
 
         return blocks
     except Exception as e:
-        print(f"Error parsing blockset file {blockset_path}: {e}")
+        logger.error(f"Error parsing blockset file {blockset_path}: {e}")
         return []
 
 
@@ -540,7 +548,7 @@ def parse_2bpp_file(file_path):
 
         return tiles
     except Exception as e:
-        print(f"Error parsing 2bpp file {file_path}: {e}")
+        logger.error(f"Error parsing 2bpp file {file_path}: {e}")
         return []
 
 
@@ -595,13 +603,13 @@ def render_map(map_name):
     map_data = cursor.fetchone()
 
     if not map_data:
-        print(f"Map {map_name} not found in database")
+        logger.warning(f"Map {map_name} not found in database")
         return None
 
     map_id, width, height, tileset_id, blk_data = map_data
 
     if not blk_data:
-        print(f"Map {map_name} has no block data")
+        logger.warning(f"Map {map_name} has no block data")
         return None
 
     # Convert hex string to bytes
@@ -615,7 +623,7 @@ def render_map(map_name):
     blockset_rows = cursor.fetchall()
 
     if not blockset_rows:
-        print(f"No blockset data found for tileset {tileset_id}")
+        logger.warning(f"No blockset data found for tileset {tileset_id}")
         return None
 
     # Create a dictionary of block_index -> block_data
@@ -629,7 +637,7 @@ def render_map(map_name):
     tile_rows = cursor.fetchall()
 
     if not tile_rows:
-        print(f"No tile data found for tileset {tileset_id}")
+        logger.warning(f"No tile data found for tileset {tileset_id}")
         return None
 
     # Create a dictionary of tile_index -> tile_data
@@ -658,7 +666,7 @@ def render_map(map_name):
             # Get the block data
             block_data = blocks.get(block_index)
             if not block_data:
-                print(f"Block {block_index} not found in blockset")
+                logger.debug(f"Block {block_index} not found in blockset")
                 continue
 
             # Each block is 4x4 tiles (2x2 squares, each square is 2x2 tiles)
@@ -670,7 +678,7 @@ def render_map(map_name):
                     # Get the tile data
                     tile_data = tiles.get(tile_index)
                     if not tile_data:
-                        print(f"Tile {tile_index} not found in tileset")
+                        logger.debug(f"Tile {tile_index} not found in tileset")
                         continue
 
                     # Decode the tile data
@@ -743,7 +751,7 @@ def load_collision_data(conn):
     )
 
     if not os.path.exists(collision_file_path):
-        print(f"Warning: Collision data file not found at {collision_file_path}")
+        logger.warning(f"Collision data file not found at {collision_file_path}")
         return conn
 
     try:
@@ -798,10 +806,10 @@ def load_collision_data(conn):
                     )
 
         conn.commit()
-        print(f"Loaded collision data for {len(collision_data)} tilesets")
+        logger.info(f"Loaded collision data for {len(collision_data)} tilesets")
 
     except Exception as e:
-        print(f"Error parsing collision data: {e}")
+        logger.error(f"Error parsing collision data: {e}")
 
     return conn
 
@@ -890,9 +898,9 @@ def main():
                         "INSERT INTO blocksets (tileset_id, block_index, block_data) VALUES (?, ?, ?)",
                         (tileset_id, block_index, block_data),
                     )
-                print(f"Inserted {len(blocks)} blocks for tileset {tileset_name}")
+                logger.info(f"Inserted {len(blocks)} blocks for tileset {tileset_name}")
             else:
-                print(f"Warning: Blockset file not found: {blockset_path}")
+                logger.warning(f"Blockset file not found: {blockset_path}")
 
             # Parse and insert tileset tile data
             tileset_2bpp_path = tileset_info["tileset_2bpp_path"]
@@ -903,13 +911,13 @@ def main():
                         "INSERT INTO tileset_tiles (tileset_id, tile_index, tile_data) VALUES (?, ?, ?)",
                         (tileset_id, tile_index, tile_data),
                     )
-                print(f"Inserted {len(tiles)} tiles for tileset {tileset_name}")
+                logger.info(f"Inserted {len(tiles)} tiles for tileset {tileset_name}")
             else:
-                print(f"Warning: 2bpp file not found: {tileset_2bpp_path}")
+                logger.warning(f"2bpp file not found: {tileset_2bpp_path}")
         else:
-            print(f"Warning: No tileset ID found for tileset {tileset_name}")
+            logger.warning(f"No tileset ID found for tileset {tileset_name}")
 
-    print(f"Inserted {tileset_count} tilesets into database")
+    logger.info(f"Inserted {tileset_count} tilesets into database")
 
     # First pass: Process all maps to identify overworld maps and their dimensions
     overworld_maps = {}
@@ -1022,15 +1030,15 @@ def main():
         map_count += 1
 
         if not blk_name:
-            print(f"Warning: No matching .blk file found for map {map_name}")
+            logger.warning(f"No matching .blk file found for map {map_name}")
         if tileset_id is None and tileset_name:
-            print(f"Warning: No tileset ID found for tileset {tileset_name}")
+            logger.warning(f"No tileset ID found for tileset {tileset_name}")
 
-    print(f"Inserted {map_count} maps into database")
-    print(f"Maps with matching tileset IDs: {tileset_match_count}")
+    logger.info(f"Inserted {map_count} maps into database")
+    logger.info(f"Maps with matching tileset IDs: {tileset_match_count}")
 
     # Populate tiles_raw table with raw tile data
-    print("Populating tiles_raw table...")
+    logger.info("Populating tiles_raw table...")
     tiles_raw_count = 0
 
     # Clear existing data
@@ -1086,7 +1094,7 @@ def main():
                 # Try to convert from binary string
                 blk_bytes = list(map(ord, blk_data))
         except Exception as e:
-            print(f"Error processing blk_data for map {map_name}: {e}")
+            logger.error(f"Error processing blk_data for map {map_name}: {e}")
             continue
 
         # Verify we have the expected number of blocks
@@ -1130,10 +1138,10 @@ def main():
                     # Commit every 1000 inserts to avoid transaction getting too large
                     if tiles_raw_count % 1000 == 0:
                         db_conn.commit()
-                        print(f"Inserted {tiles_raw_count} raw tiles so far...")
+                        logger.info(f"Inserted {tiles_raw_count} raw tiles so far...")
 
     db_conn.commit()
-    print(f"Inserted {tiles_raw_count} raw tiles into tiles_raw table")
+    logger.info(f"Inserted {tiles_raw_count} raw tiles into tiles_raw table")
 
     # Insert map connections
     connection_count = 0
@@ -1152,7 +1160,7 @@ def main():
         )
         connection_count += 1
 
-    print(f"Inserted {connection_count} map connections into database")
+    logger.info(f"Inserted {connection_count} map connections into database")
 
     # Add a special table to store overworld map positioning information
     cursor.execute("DROP TABLE IF EXISTS overworld_map_positions")
@@ -1170,7 +1178,7 @@ def main():
     db_conn.commit()
     db_conn.close()
 
-    print("Map data exported to pokemon.db successfully!")
+    logger.info("Map data exported to pokemon.db successfully!")
 
 
 if __name__ == "__main__":
@@ -1178,4 +1186,12 @@ if __name__ == "__main__":
         description="Export Pokémon map data to a database"
     )
     args = parser.parse_args()
-    main()
+
+    log_script_start(logger, "export_map.py")
+    try:
+        main()
+        log_script_end(logger, "export_map.py", success=True)
+    except Exception as e:
+        logger.error(f"Script failed with error: {e}", exc_info=True)
+        log_script_end(logger, "export_map.py", success=False)
+        raise

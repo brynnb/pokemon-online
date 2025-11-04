@@ -3,6 +3,14 @@ import os
 import re
 import sqlite3
 from pathlib import Path
+import sys
+
+# Add the export_scripts directory to the path for local imports
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+from utils.logger import setup_logger, log_script_start, log_script_end
+
+# Set up logger
+logger = setup_logger(__name__)
 
 # Constants
 BASE_DIR = Path(
@@ -231,7 +239,7 @@ def parse_tm_hm_moves():
         move_name = match.group(1)
         tm_moves.append(move_name)
 
-    print(f"Found {len(tm_moves)} TM moves")
+    logger.info(f"Found {len(tm_moves)} TM moves")
 
     # TMs start at item ID 0xC9 (201)
     tm_count = 0
@@ -252,7 +260,7 @@ def parse_tm_hm_moves():
         move_name = match.group(1)
         hm_moves.append(move_name)
 
-    print(f"Found {len(hm_moves)} HM moves")
+    logger.info(f"Found {len(hm_moves)} HM moves")
 
     # HMs start at item ID 0xC4 (196)
     hm_count = 0
@@ -435,7 +443,7 @@ def main():
                 hm_count += 1
                 next_id += 1
             except sqlite3.Error as e:
-                print(f"Error adding HM item {item_name}: {e}")
+                logger.error(f"Error adding HM item {item_name}: {e}")
 
     # Add TM items (TM01-TM50)
     tm_count = 0
@@ -476,16 +484,23 @@ def main():
                 tm_count += 1
                 next_id += 1
             except sqlite3.Error as e:
-                print(f"Error adding TM item {item_name}: {e}")
+                logger.error(f"Error adding TM item {item_name}: {e}")
 
-    print(f"Added {hm_count} HM items and {tm_count} TM items to the database")
+    logger.info(f"Added {hm_count} HM items and {tm_count} TM items to the database")
 
     # Commit changes and close connection
     conn.commit()
     conn.close()
 
-    print(f"Successfully exported {item_count} items to pokemon.db")
+    logger.info(f"Successfully exported {item_count} items to pokemon.db")
 
 
 if __name__ == "__main__":
-    main()
+    log_script_start(logger, "export_items.py")
+    try:
+        main()
+        log_script_end(logger, "export_items.py", success=True)
+    except Exception as e:
+        logger.error(f"Script failed with error: {e}", exc_info=True)
+        log_script_end(logger, "export_items.py", success=False)
+        raise

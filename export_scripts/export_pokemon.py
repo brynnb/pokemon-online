@@ -5,9 +5,15 @@ import glob
 from pathlib import Path
 import sys
 
+# Add the export_scripts directory to the path for local imports
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 # Add the root directory to the Python path to allow imports from utils
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 from utils.pokemon_utils import SPECIAL_NAME_MAPPINGS, normalize_pokemon_name
+from utils.logger import setup_logger, log_script_start, log_script_end
+
+# Set up logger
+logger = setup_logger(__name__)
 
 # Constants
 # Get the project root directory (parent of the script's directory)
@@ -464,8 +470,15 @@ def main():
     conn.commit()
     conn.close()
 
-    print(f"Exported data for {len(pokemon_dex)} Pokémon to pokemon.db")
+    logger.info(f"Exported data for {len(pokemon_dex)} Pokémon to pokemon.db")
 
 
 if __name__ == "__main__":
-    main()
+    log_script_start(logger, "export_pokemon.py")
+    try:
+        main()
+        log_script_end(logger, "export_pokemon.py", success=True)
+    except Exception as e:
+        logger.error(f"Script failed with error: {e}", exc_info=True)
+        log_script_end(logger, "export_pokemon.py", success=False)
+        raise

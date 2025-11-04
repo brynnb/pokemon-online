@@ -3,7 +3,15 @@
 import os
 import shutil
 import glob
+import sys
 from PIL import Image
+
+# Add the parent directory to the path to import utils
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+from utils.logger import setup_logger, log_script_start, log_script_end
+
+# Set up logger
+logger = setup_logger(__name__)
 
 
 def extract_tileset_signs():
@@ -43,9 +51,9 @@ def extract_tileset_signs():
             extracted_count += 1
 
         except Exception as e:
-            print(f"Error extracting {tileset_name} sign: {e}")
+            logger.error(f"Error extracting {tileset_name} sign: {e}")
 
-    print(f"Successfully extracted {extracted_count} sign tiles")
+    logger.info(f"Successfully extracted {extracted_count} sign tiles")
     return extracted_count > 0
 
 
@@ -81,7 +89,7 @@ def make_white_pixels_transparent(source_path, dest_path, filename="image"):
         return True
 
     except Exception as e:
-        print(f"Error processing {filename}: {e}")
+        logger.error(f"Error processing {filename}: {e}")
         return False
 
 
@@ -136,15 +144,16 @@ def copy_sprite_files():
                         transparent_count += 1
 
             except Exception as e:
-                print(f"Error copying {filename}: {e}")
+                logger.error(f"Error copying {filename}: {e}")
 
-    print(f"Successfully copied {copied_count} sprite files")
-    print(f"Successfully made {transparent_count} sprite files transparent")
+    logger.info(f"Successfully copied {copied_count} sprite files")
+    logger.info(f"Successfully made {transparent_count} sprite files transparent")
     return copied_count > 0
 
 
-if __name__ == "__main__":
-    print("Starting sprite file copy process...")
+def main():
+    """Main function"""
+    logger.info("Starting sprite file copy process...")
 
     # Copy sprite files
     sprite_success = copy_sprite_files()
@@ -153,7 +162,18 @@ if __name__ == "__main__":
     sign_success = extract_tileset_signs()
 
     if sprite_success and sign_success:
-        print("File copy process completed successfully")
+        logger.info("File copy process completed successfully")
     else:
-        print("File copy process failed")
+        logger.error("File copy process failed")
         exit(1)
+
+
+if __name__ == "__main__":
+    log_script_start(logger, "move_files.py")
+    try:
+        main()
+        log_script_end(logger, "move_files.py", success=True)
+    except Exception as e:
+        logger.error(f"Script failed with error: {e}", exc_info=True)
+        log_script_end(logger, "move_files.py", success=False)
+        raise

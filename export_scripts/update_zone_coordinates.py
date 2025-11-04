@@ -28,8 +28,17 @@ Usage:
 """
 
 import sqlite3
+import sys
 import time
 from pathlib import Path
+
+# Add the parent directory to the path to import utils
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+import os
+from utils.logger import setup_logger, log_script_start, log_script_end
+
+# Set up logger
+logger = setup_logger(__name__)
 
 # Constants
 # Get the project root directory (parent of the script's directory)
@@ -215,7 +224,7 @@ def process_map_connections(conn):
             conn, current_map_id, current_x_offset, current_y_offset
         )
         map_name = get_map_name(cursor, current_map_id)
-        print(
+        logger.info(
             f"Updated {updated_tiles} tiles for {map_name} (map_id {current_map_id}) with offsets ({current_x_offset}, {current_y_offset})"
         )
 
@@ -274,7 +283,7 @@ def process_map_connections(conn):
                 new_y_offset = current_y_offset + y_offset
                 map_queue.append((connected_map_id, new_x_offset, new_y_offset))
 
-    print(f"\nProcessed {len(processed_maps)} maps")
+    logger.info(f"\nProcessed {len(processed_maps)} maps")
     return processed_maps
 
 
@@ -291,7 +300,7 @@ def main():
         processed_maps = process_map_connections(conn)
 
         # Verify the results
-        print("\nFinal coordinates:")
+        logger.info("\nFinal coordinates:")
         for map_id in processed_maps:
             cursor.execute(
                 "SELECT MIN(x), MAX(x), MIN(y), MAX(y) FROM tiles WHERE map_id = ?",
@@ -299,16 +308,23 @@ def main():
             )
             coords = cursor.fetchone()
             map_name = get_map_name(cursor, map_id)
-            print(
+            logger.info(
                 f"{map_name} (map_id {map_id}): x={coords[0]} to {coords[1]}, y={coords[2]} to {coords[3]}"
             )
 
         elapsed_time = time.time() - start_time
-        print(f"\nTotal time: {elapsed_time:.2f} seconds")
+        logger.info(f"\nTotal time: {elapsed_time:.2f} seconds")
 
     finally:
         conn.close()
 
 
 if __name__ == "__main__":
-    main()
+    log_script_start(logger, "update_zone_coordinates.py")
+    try:
+        main()
+        log_script_end(logger, "update_zone_coordinates.py", success=True)
+    except Exception as e:
+        logger.error(f"Script failed with error: {e}", exc_info=True)
+        log_script_end(logger, "update_zone_coordinates.py", success=False)
+        raise
