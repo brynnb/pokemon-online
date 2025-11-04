@@ -4,13 +4,13 @@ import re
 import sqlite3
 from pathlib import Path
 
-# Constants
-# Get the project root directory (parent of the script's directory)
-PROJECT_ROOT = Path(__file__).resolve().parent.parent
-DB_PATH = PROJECT_ROOT / "pokemon.db"
-POKEMON_DATA_DIR = PROJECT_ROOT / "pokemon-game-data/data/maps/objects"
-CONSTANTS_DIR = PROJECT_ROOT / "pokemon-game-data/constants"
-MAP_HEADERS_DIR = PROJECT_ROOT / "pokemon-game-data/data/maps/headers"
+# Import centralized configuration
+from config import (
+    DB_PATH,
+    MAP_OBJECTS_DIR,
+    CONSTANTS_DIR,
+    MAP_HEADERS_DIR,
+)
 
 # Object types
 OBJECT_TYPE_BG = "sign"
@@ -274,7 +274,7 @@ def main():
     conn, cursor = create_database()
 
     # Get all map object files
-    map_files = list(POKEMON_DATA_DIR.glob("*.asm"))
+    map_files = list(MAP_OBJECTS_DIR.glob("*.asm"))
     print(f"Found {len(map_files)} map files")
 
     # Process each map file

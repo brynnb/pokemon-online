@@ -9,14 +9,12 @@ import sys
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 from utils.pokemon_utils import SPECIAL_NAME_MAPPINGS, normalize_pokemon_name
 
-# Constants
-# Get the project root directory (parent of the script's directory)
-PROJECT_ROOT = Path(__file__).resolve().parent.parent
-DB_PATH = PROJECT_ROOT / "pokemon.db"
-POKEMON_DATA_DIR = PROJECT_ROOT / "pokemon-game-data/data/pokemon"
-BASE_STATS_DIR = POKEMON_DATA_DIR / "base_stats"
-POKEDEX_CONSTANTS_FILE = (
-    PROJECT_ROOT / "pokemon-game-data/constants/pokedex_constants.asm"
+# Import centralized configuration
+from config import (
+    DB_PATH,
+    POKEMON_DATA_DIR,
+    BASE_STATS_DIR,
+    POKEDEX_CONSTANTS_FILE,
 )
 
 # Regular expressions

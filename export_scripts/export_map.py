@@ -33,17 +33,18 @@ import binascii
 import argparse
 from PIL import Image, ImageDraw
 
-# Constants
-# Get the project root directory (parent of the script's directory)
-PROJECT_ROOT = Path(__file__).resolve().parent.parent
-DB_PATH = PROJECT_ROOT / "pokemon.db"
-MAPS_DIR = PROJECT_ROOT / "pokemon-game-data/maps"
-MAP_HEADERS_DIR = PROJECT_ROOT / "pokemon-game-data/data/maps/headers"
-MAP_CONSTANTS_FILE = PROJECT_ROOT / "pokemon-game-data/constants/map_constants.asm"
-BLOCKSETS_DIR = PROJECT_ROOT / "pokemon-game-data/gfx/blocksets"
-TILESETS_DIR = PROJECT_ROOT / "pokemon-game-data/gfx/tilesets"
-TILESET_CONSTANTS_FILE = (
-    PROJECT_ROOT / "pokemon-game-data/constants/tileset_constants.asm"
+# Import centralized configuration
+from config import (
+    PROJECT_ROOT,
+    DB_PATH,
+    MAPS_DIR,
+    MAP_HEADERS_DIR,
+    MAP_CONSTANTS_FILE,
+    BLOCKSETS_DIR,
+    TILESETS_DIR,
+    TILESET_CONSTANTS_FILE,
+    COLLISION_TILE_IDS_FILE,
+    GAMEBOY_PALETTE,
 )
 
 # Regular expressions
@@ -635,8 +636,8 @@ def render_map(map_name):
     # Create a dictionary of tile_index -> tile_data
     tiles = {row[0]: row[1] for row in tile_rows}
 
-    # Define GameBoy color palette (white, light gray, dark gray, black)
-    palette = [(255, 255, 255), (192, 192, 192), (96, 96, 96), (0, 0, 0)]
+    # Use GameBoy color palette from config
+    palette = GAMEBOY_PALETTE
 
     # Calculate image dimensions
     # Each block is 2x2 squares, each square is 16x16 pixels
@@ -738,9 +739,7 @@ def load_collision_data(conn):
     }
 
     # Parse the collision data from the original game's collision_tile_ids.asm file
-    collision_file_path = (
-        PROJECT_ROOT / "pokemon-game-data/data/tilesets/collision_tile_ids.asm"
-    )
+    collision_file_path = COLLISION_TILE_IDS_FILE
 
     if not os.path.exists(collision_file_path):
         print(f"Warning: Collision data file not found at {collision_file_path}")

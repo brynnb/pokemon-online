@@ -4,12 +4,12 @@ import re
 import sqlite3
 from pathlib import Path
 
-# Constants
-# Get the project root directory (parent of the script's directory)
-PROJECT_ROOT = Path(__file__).resolve().parent.parent
-DB_PATH = PROJECT_ROOT / "pokemon.db"
-POKEMON_DATA_DIR = PROJECT_ROOT / "pokemon-game-data/data/moves"
-CONSTANTS_DIR = PROJECT_ROOT / "pokemon-game-data/constants"
+# Import centralized configuration
+from config import (
+    DB_PATH,
+    MOVES_DATA_DIR,
+    CONSTANTS_DIR,
+)
 
 # Hardcoded HM moves based on hm_moves.asm
 HM_MOVES = {"CUT", "FLY", "SURF", "STRENGTH", "FLASH"}
@@ -96,7 +96,7 @@ def parse_move_data():
     moves_data = {}
     move_name_to_type = {}  # New mapping of move names to types
 
-    with open(POKEMON_DATA_DIR / "moves.asm", "r") as f:
+    with open(MOVES_DATA_DIR / "moves.asm", "r") as f:
         lines = f.readlines()
 
     # Skip header lines until we reach the moves table
@@ -140,7 +140,7 @@ def parse_move_names():
     """Parse move names from names.asm"""
     move_names = {}
 
-    with open(POKEMON_DATA_DIR / "names.asm", "r") as f:
+    with open(MOVES_DATA_DIR / "names.asm", "r") as f:
         lines = f.readlines()
 
     # Skip header lines until we reach the move names
@@ -172,7 +172,7 @@ def parse_move_sounds():
     """Parse move sound effects from sfx.asm"""
     move_sounds = {}
 
-    with open(POKEMON_DATA_DIR / "sfx.asm", "r") as f:
+    with open(MOVES_DATA_DIR / "sfx.asm", "r") as f:
         lines = f.readlines()
 
     # Skip header lines until we reach the sound table
@@ -208,7 +208,7 @@ def parse_move_grammar():
     """Parse move grammar from grammar.asm"""
     move_grammar = {}
 
-    with open(POKEMON_DATA_DIR / "grammar.asm", "r") as f:
+    with open(MOVES_DATA_DIR / "grammar.asm", "r") as f:
         lines = f.readlines()
 
     # Parse each grammar set
@@ -238,7 +238,7 @@ def parse_battle_animations():
     """Parse battle animations from animations.asm"""
     battle_animations = {}
 
-    with open(POKEMON_DATA_DIR / "animations.asm", "r") as f:
+    with open(MOVES_DATA_DIR / "animations.asm", "r") as f:
         lines = f.readlines()
 
     # Find all animation definitions

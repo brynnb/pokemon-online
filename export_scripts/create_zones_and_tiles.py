@@ -24,12 +24,14 @@ import hashlib
 import io
 import re
 
-# Constants
-# Get the project root directory (parent of the script's directory)
-PROJECT_ROOT = Path(__file__).resolve().parent.parent
-DB_PATH = PROJECT_ROOT / "pokemon.db"
-TILE_IMAGES_DIR = "tile_images"
-BATCH_SIZE = 1000  # Number of tiles to insert in a single batch
+# Import centralized configuration
+from config import (
+    DB_PATH,
+    TILE_IMAGES_DIR,
+    BATCH_SIZE,
+    GAMEBOY_PALETTE,
+    TILESET_ALIASES,
+)
 
 
 def create_new_tables():
@@ -146,8 +148,8 @@ def extract_tile_images(conn):
             print(f"Error removing {old_file}: {e}")
     print(f"Removed {len(old_files)} old tile images")
 
-    # Define GameBoy color palette (white, light gray, dark gray, black)
-    palette = [(255, 255, 255), (192, 192, 192), (96, 96, 96), (0, 0, 0)]
+    # Use GameBoy color palette from config
+    palette = GAMEBOY_PALETTE
 
     # Get all tilesets
     cursor.execute("SELECT id, name FROM tilesets")
@@ -172,13 +174,9 @@ def extract_tile_images(conn):
         sys.stdout.write(f"\rProcessing tileset {i}/{total_tilesets}: {tileset_name}")
         sys.stdout.flush()
 
-        # Special case: Map DOJO (tileset ID 5) to GYM (tileset ID 7)
-        # This is because in the original game, DOJO uses the same graphics as GYM
-        query_tileset_id = 7 if tileset_id == 5 else tileset_id
-        # Special case: Map MART (tileset ID 2) to POKECENTER (tileset ID 6)
-        # This is because marts and pokecenters share similar interior graphics
-        if tileset_id == 2:
-            query_tileset_id = 6
+        # Apply tileset aliases from config
+        # Some tilesets share the same graphics in the original game
+        query_tileset_id = TILESET_ALIASES.get(tileset_id, tileset_id)
 
         # Get blockset data for this tileset
         cursor.execute(
@@ -444,13 +442,9 @@ def populate_tiles(conn, block_pos_to_image_id):
             raw_is_overworld,
             raw_is_walkable,
         ) in raw_tiles:
-            # Special case: Map DOJO (tileset ID 5) to GYM (tileset ID 7)
-            # This is because in the original game, DOJO uses the same graphics as GYM
-            lookup_tileset_id = 7 if raw_tileset_id == 5 else raw_tileset_id
-            # Special case: Map MART (tileset ID 2) to POKECENTER (tileset ID 6)
-            # This is because marts and pokecenters share similar interior graphics
-            if raw_tileset_id == 2:
-                lookup_tileset_id = 6
+            # Apply tileset aliases from config
+            # Some tilesets share the same graphics in the original game
+            lookup_tileset_id = TILESET_ALIASES.get(raw_tileset_id, raw_tileset_id)
 
             # Get the block data to check individual tiles
             cursor.execute(

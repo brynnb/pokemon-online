@@ -4,19 +4,20 @@ import re
 import sqlite3
 from pathlib import Path
 
-# Constants
-BASE_DIR = Path(
-    __file__
-).parent.parent  # Get the parent directory of the script's directory
-POKEMON_DATA_DIR = BASE_DIR / "pokemon-game-data/data/items"
-CONSTANTS_DIR = BASE_DIR / "pokemon-game-data/constants"
-MOVES_DATA_DIR = BASE_DIR / "pokemon-game-data/data/moves"
+# Import centralized configuration
+from config import (
+    PROJECT_ROOT,
+    DB_PATH,
+    ITEMS_DATA_DIR,
+    CONSTANTS_DIR,
+    MOVES_DATA_DIR,
+)
 
 
 def create_database():
     """Create SQLite database and tables"""
     # Use the database in the project root
-    conn = sqlite3.connect(BASE_DIR / "pokemon.db")
+    conn = sqlite3.connect(DB_PATH)
     cursor = conn.cursor()
 
     # Drop existing items table if it exists
@@ -66,7 +67,7 @@ def parse_item_constants():
 
 def parse_item_names():
     """Parse item names from names.asm"""
-    names_path = POKEMON_DATA_DIR / "names.asm"
+    names_path = ITEMS_DATA_DIR / "names.asm"
 
     with open(names_path, "r") as f:
         content = f.read()
@@ -94,7 +95,7 @@ def parse_item_names():
 
 def parse_item_prices():
     """Parse item prices from prices.asm"""
-    prices_path = POKEMON_DATA_DIR / "prices.asm"
+    prices_path = ITEMS_DATA_DIR / "prices.asm"
 
     with open(prices_path, "r") as f:
         content = f.read()
@@ -113,7 +114,7 @@ def parse_item_prices():
 
 def parse_key_items():
     """Parse key items from key_items.asm"""
-    key_items_path = POKEMON_DATA_DIR / "key_items.asm"
+    key_items_path = ITEMS_DATA_DIR / "key_items.asm"
 
     with open(key_items_path, "r") as f:
         content = f.read()
@@ -133,7 +134,7 @@ def parse_key_items():
 
 def parse_party_menu_items():
     """Parse items that use party menu from use_party.asm"""
-    party_menu_path = POKEMON_DATA_DIR / "use_party.asm"
+    party_menu_path = ITEMS_DATA_DIR / "use_party.asm"
 
     with open(party_menu_path, "r") as f:
         content = f.read()
@@ -153,7 +154,7 @@ def parse_party_menu_items():
 
 def parse_overworld_items():
     """Parse items usable in overworld from use_overworld.asm"""
-    overworld_path = POKEMON_DATA_DIR / "use_overworld.asm"
+    overworld_path = ITEMS_DATA_DIR / "use_overworld.asm"
 
     with open(overworld_path, "r") as f:
         content = f.read()
@@ -173,7 +174,7 @@ def parse_overworld_items():
 
 def parse_guard_drink_items():
     """Parse guard drink items from guard_drink_items.asm"""
-    guard_drink_path = POKEMON_DATA_DIR / "guard_drink_items.asm"
+    guard_drink_path = ITEMS_DATA_DIR / "guard_drink_items.asm"
 
     with open(guard_drink_path, "r") as f:
         content = f.read()
@@ -193,7 +194,7 @@ def parse_guard_drink_items():
 
 def parse_vending_prices():
     """Parse vending prices from vending_prices.asm"""
-    vending_path = POKEMON_DATA_DIR / "vending_prices.asm"
+    vending_path = ITEMS_DATA_DIR / "vending_prices.asm"
 
     with open(vending_path, "r") as f:
         content = f.read()

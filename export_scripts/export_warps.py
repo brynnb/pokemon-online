@@ -5,13 +5,13 @@ import sqlite3
 from pathlib import Path
 from collections import defaultdict
 
-# Constants
-# Get the project root directory (parent of the script's directory)
-PROJECT_ROOT = Path(__file__).resolve().parent.parent
-POKEMON_DATA_DIR = PROJECT_ROOT / "pokemon-game-data/data/maps/objects"
-CONSTANTS_DIR = PROJECT_ROOT / "pokemon-game-data/constants"
-MAP_HEADERS_DIR = PROJECT_ROOT / "pokemon-game-data/data/maps/headers"
-DB_PATH = PROJECT_ROOT / "pokemon.db"
+# Import centralized configuration
+from config import (
+    DB_PATH,
+    MAP_OBJECTS_DIR,
+    CONSTANTS_DIR,
+    MAP_HEADERS_DIR,
+)
 
 # Map categories
 CITIES_AND_TOWNS = [
@@ -362,11 +362,11 @@ def find_destination_coordinates(source_map, destination_map, destination_warp_i
     destination_file_name = convert_map_name_to_file_name(destination_map)
 
     # Construct the path to the destination map file
-    destination_file = POKEMON_DATA_DIR / f"{destination_file_name}.asm"
+    destination_file = MAP_OBJECTS_DIR / f"{destination_file_name}.asm"
 
     # If the file doesn't exist, try the original name
     if not destination_file.exists():
-        destination_file = POKEMON_DATA_DIR / f"{destination_map}.asm"
+        destination_file = MAP_OBJECTS_DIR / f"{destination_map}.asm"
 
     # If the file still doesn't exist, return None
     if not destination_file.exists():
@@ -430,7 +430,7 @@ def resolve_last_map_warps(all_warps, cursor, map_to_map_id, map_formats):
                     parent_file = convert_map_name_to_file_name(parent_map)
 
                     # Check if parent file exists
-                    parent_file_path = POKEMON_DATA_DIR / f"{parent_file}.asm"
+                    parent_file_path = MAP_OBJECTS_DIR / f"{parent_file}.asm"
                     if parent_file_path.exists():
                         # Use parent location as destination
                         warp["destination_map"] = parent_map
@@ -508,7 +508,7 @@ def main():
         print("Warning: 'maps' table not found, continuing without map ID mapping")
 
     # Get all map files
-    map_files = list(POKEMON_DATA_DIR.glob("*.asm"))
+    map_files = list(MAP_OBJECTS_DIR.glob("*.asm"))
     print(f"Found {len(map_files)} map files")
 
     # Process each map file
