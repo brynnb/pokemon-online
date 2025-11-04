@@ -28,6 +28,7 @@ import re
 import sqlite3
 import glob
 import subprocess
+import sys
 from pathlib import Path
 import binascii
 import argparse
@@ -846,6 +847,19 @@ def is_block_walkable(block_index, tileset_id, conn):
     return True
 
 
+def check_dependencies():
+    """Verify all required tools are installed"""
+    try:
+        subprocess.run(["rgbgfx", "--version"],
+                      capture_output=True, check=True)
+        return True
+    except (subprocess.CalledProcessError, FileNotFoundError):
+        print("ERROR: rgbgfx tool not found. Install RGBDS:")
+        print("  macOS: brew install rgbds")
+        print("  Ubuntu: sudo apt-get install rgbds")
+        return False
+
+
 def main():
     # Ensure 2bpp files exist
     ensure_2bpp_files_exist()
@@ -1178,4 +1192,8 @@ if __name__ == "__main__":
         description="Export Pokémon map data to a database"
     )
     args = parser.parse_args()
+
+    if not check_dependencies():
+        sys.exit(1)
+
     main()
