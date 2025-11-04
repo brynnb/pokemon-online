@@ -23,6 +23,11 @@ import time
 import hashlib
 import io
 import re
+import logging
+
+# Configure logging
+logging.basicConfig(level=logging.INFO, format='%(levelname)s: %(message)s')
+logger = logging.getLogger(__name__)
 
 # Constants
 # Get the project root directory (parent of the script's directory)
@@ -566,8 +571,38 @@ def populate_tiles(conn, block_pos_to_image_id):
     )
 
 
+def check_prerequisites():
+    """Verify required tables exist before running this script"""
+    if not DB_PATH.exists():
+        logger.error(f"Database not found at {DB_PATH}")
+        logger.error("Run export_map.py first to create the database")
+        return False
+
+    conn = sqlite3.connect(DB_PATH)
+    cursor = conn.cursor()
+
+    required_tables = ['maps', 'tilesets', 'tiles_raw', 'blocksets', 'tileset_tiles']
+    cursor.execute(
+        "SELECT name FROM sqlite_master WHERE type='table'"
+    )
+    existing_tables = {row[0] for row in cursor.fetchall()}
+
+    missing = set(required_tables) - existing_tables
+    if missing:
+        logger.error(f"Missing required tables: {', '.join(sorted(missing))}")
+        logger.error("Run export_map.py first to create these tables")
+        conn.close()
+        return False
+
+    conn.close()
+    return True
+
+
 def main():
     """Main function"""
+    if not check_prerequisites():
+        sys.exit(1)
+
     total_start_time = time.time()
 
     print("Creating new tables...")

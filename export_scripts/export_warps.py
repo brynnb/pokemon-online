@@ -4,6 +4,12 @@ import re
 import sqlite3
 from pathlib import Path
 from collections import defaultdict
+import sys
+import logging
+
+# Configure logging
+logging.basicConfig(level=logging.INFO, format='%(levelname)s: %(message)s')
+logger = logging.getLogger(__name__)
 
 # Constants
 # Get the project root directory (parent of the script's directory)
@@ -468,7 +474,37 @@ def resolve_last_map_warps(all_warps, cursor, map_to_map_id, map_formats):
     return resolved_warps
 
 
+def check_prerequisites():
+    """Verify required tables exist before running this script"""
+    if not DB_PATH.exists():
+        logger.error(f"Database not found at {DB_PATH}")
+        logger.error("Run export_map.py first to create the database")
+        return False
+
+    conn = sqlite3.connect(DB_PATH)
+    cursor = conn.cursor()
+
+    required_tables = ['maps']
+    cursor.execute(
+        "SELECT name FROM sqlite_master WHERE type='table'"
+    )
+    existing_tables = {row[0] for row in cursor.fetchall()}
+
+    missing = set(required_tables) - existing_tables
+    if missing:
+        logger.error(f"Missing required tables: {', '.join(sorted(missing))}")
+        logger.error("Run export_map.py first to create the maps table")
+        conn.close()
+        return False
+
+    conn.close()
+    return True
+
+
 def main():
+    if not check_prerequisites():
+        sys.exit(1)
+
     # Create database
     conn, cursor = create_database()
 

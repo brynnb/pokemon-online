@@ -1,14 +1,52 @@
 import sqlite3
 import sys
 from pathlib import Path
+import logging
+
+# Configure logging
+logging.basicConfig(level=logging.INFO, format='%(levelname)s: %(message)s')
+logger = logging.getLogger(__name__)
 
 # Get the project root directory (parent of the script's directory)
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
 DB_PATH = PROJECT_ROOT / "pokemon.db"
 
 
+def check_prerequisites():
+    """Verify required tables exist before running this script"""
+    if not DB_PATH.exists():
+        logger.error(f"Database not found at {DB_PATH}")
+        logger.error("Run export_map.py first to create the database")
+        return False
+
+    conn = sqlite3.connect(DB_PATH)
+    cursor = conn.cursor()
+
+    required_tables = ['tiles', 'maps']
+    cursor.execute(
+        "SELECT name FROM sqlite_master WHERE type='table'"
+    )
+    existing_tables = {row[0] for row in cursor.fetchall()}
+
+    missing = set(required_tables) - existing_tables
+    if missing:
+        logger.error(f"Missing required tables: {', '.join(sorted(missing))}")
+        if 'tiles' in missing:
+            logger.error("Run create_zones_and_tiles.py first to create the tiles table")
+        if 'maps' in missing:
+            logger.error("Run export_map.py first to create the maps table")
+        conn.close()
+        return False
+
+    conn.close()
+    return True
+
+
 def update_overworld_tiles():
     """Update tiles to mark them as overworld based on their map's is_overworld flag"""
+    if not check_prerequisites():
+        sys.exit(1)
+
     conn = sqlite3.connect(DB_PATH)
     cursor = conn.cursor()
 
