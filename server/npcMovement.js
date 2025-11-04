@@ -319,6 +319,11 @@ class NPCMovementManager {
         return false;
       }
 
+      // Check if the tile is walkable
+      if (!tile.is_walkable) {
+        return false;
+      }
+
       // Check if there's a collision at the new position
       const collision = await this.checkCollision(
         newX,

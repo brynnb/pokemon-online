@@ -67,6 +67,7 @@ def create_database():
     cursor.execute("DROP TABLE IF EXISTS blocksets")
     cursor.execute("DROP TABLE IF EXISTS tileset_tiles")
     cursor.execute("DROP TABLE IF EXISTS tiles_raw")
+    cursor.execute("DROP TABLE IF EXISTS collision_tiles")
 
     # Create maps table
     cursor.execute(
@@ -140,6 +141,19 @@ def create_database():
     """
     )
 
+    # Create collision_tiles table to store collision data from the original game
+    cursor.execute(
+        """
+    CREATE TABLE IF NOT EXISTS collision_tiles (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        tileset_id INTEGER NOT NULL,
+        tileset_name TEXT NOT NULL,
+        tile_id INTEGER NOT NULL,
+        FOREIGN KEY (tileset_id) REFERENCES tilesets (id)
+    )
+    """
+    )
+
     # Create tiles_raw table to store raw tile data before processing
     cursor.execute(
         """
@@ -151,6 +165,7 @@ def create_database():
         block_index INTEGER NOT NULL,
         tileset_id INTEGER NOT NULL,
         is_overworld INTEGER NOT NULL DEFAULT 0,
+        is_walkable INTEGER NOT NULL DEFAULT 1,
         FOREIGN KEY (map_id) REFERENCES maps (id),
         FOREIGN KEY (tileset_id) REFERENCES tilesets (id)
     )
@@ -687,6 +702,150 @@ def render_map(map_name):
     return img
 
 
+def load_collision_data(conn):
+    """Load collision data from the original game's collision_tile_ids.asm file"""
+    cursor = conn.cursor()
+
+    # Clear existing collision data
+    cursor.execute("DELETE FROM collision_tiles")
+
+    # Define the mapping between collision data names and tileset IDs
+    collision_to_tileset = {
+        "Underground_Coll": {"id": 11, "name": "UNDERGROUND"},
+        "Overworld_Coll": {"id": 0, "name": "OVERWORLD"},
+        "RedsHouse1_Coll": {"id": 1, "name": "REDS_HOUSE_1"},
+        "RedsHouse2_Coll": {"id": 4, "name": "REDS_HOUSE_2"},
+        "Mart_Coll": {"id": 2, "name": "MART"},
+        "Pokecenter_Coll": {"id": 6, "name": "POKECENTER"},
+        "Dojo_Coll": {"id": 5, "name": "DOJO"},
+        "Gym_Coll": {"id": 7, "name": "GYM"},
+        "Forest_Coll": {"id": 3, "name": "FOREST"},
+        "House_Coll": {"id": 8, "name": "HOUSE"},
+        "ForestGate_Coll": {"id": 9, "name": "FOREST_GATE"},
+        "Museum_Coll": {"id": 10, "name": "MUSEUM"},
+        "Gate_Coll": {"id": 12, "name": "GATE"},
+        "Ship_Coll": {"id": 13, "name": "SHIP"},
+        "ShipPort_Coll": {"id": 14, "name": "SHIP_PORT"},
+        "Cemetery_Coll": {"id": 15, "name": "CEMETERY"},
+        "Interior_Coll": {"id": 16, "name": "INTERIOR"},
+        "Cavern_Coll": {"id": 17, "name": "CAVERN"},
+        "Lobby_Coll": {"id": 18, "name": "LOBBY"},
+        "Mansion_Coll": {"id": 19, "name": "MANSION"},
+        "Lab_Coll": {"id": 20, "name": "LAB"},
+        "Club_Coll": {"id": 21, "name": "CLUB"},
+        "Facility_Coll": {"id": 22, "name": "FACILITY"},
+        "Plateau_Coll": {"id": 23, "name": "PLATEAU"},
+    }
+
+    # Parse the collision data from the original game's collision_tile_ids.asm file
+    collision_file_path = (
+        PROJECT_ROOT / "pokemon-game-data/data/tilesets/collision_tile_ids.asm"
+    )
+
+    if not os.path.exists(collision_file_path):
+        print(f"Warning: Collision data file not found at {collision_file_path}")
+        return conn
+
+    try:
+        with open(collision_file_path, "r") as f:
+            content = f.read()
+
+        # Parse the collision data
+        collision_data = {}
+        current_coll = None
+
+        # Split the file into lines
+        lines = content.split("\n")
+        for line in lines:
+            line = line.strip()
+
+            # Check if this is a collision data label
+            if line.endswith("_Coll::"):
+                current_coll = line.replace("::", "")
+                collision_data[current_coll] = []
+
+            # Check if this is a coll_tiles line
+            elif line.startswith("coll_tiles") and current_coll:
+                # Extract the tile IDs
+                tile_ids_part = line.replace("coll_tiles", "").strip()
+
+                # Skip empty lines or lines with just a comment
+                if not tile_ids_part or tile_ids_part == ";":
+                    continue
+
+                # Extract the hex values
+                hex_values = re.findall(r"\$([0-9A-Fa-f]+)", tile_ids_part)
+
+                # Convert hex values to integers
+                for hex_val in hex_values:
+                    tile_id = int(hex_val, 16)
+                    collision_data[current_coll].append(tile_id)
+
+        # Insert the parsed collision data into the database
+        for coll_name, tile_ids in collision_data.items():
+            if coll_name in collision_to_tileset:
+                tileset_info = collision_to_tileset[coll_name]
+                tileset_id = tileset_info["id"]
+                tileset_name = tileset_info["name"]
+
+                for tile_id in tile_ids:
+                    cursor.execute(
+                        """
+                        INSERT INTO collision_tiles (tileset_id, tileset_name, tile_id)
+                        VALUES (?, ?, ?)
+                        """,
+                        (tileset_id, tileset_name, tile_id),
+                    )
+
+        conn.commit()
+        print(f"Loaded collision data for {len(collision_data)} tilesets")
+
+    except Exception as e:
+        print(f"Error parsing collision data: {e}")
+
+    return conn
+
+
+def is_block_walkable(block_index, tileset_id, conn):
+    """Determine if a block is walkable based on the original Pokémon game's collision data.
+
+    In the original game, each tileset has a specific list of tile IDs that are considered
+    collision tiles (non-walkable). These are stored in the collision_tiles table.
+
+    Args:
+        block_index: The block index to check
+        tileset_id: The tileset ID
+        conn: Database connection
+
+    Returns:
+        bool: True if the block is walkable, False otherwise
+    """
+    cursor = conn.cursor()
+
+    # Check if the block_index is in the collision_tiles table for this tileset
+    cursor.execute(
+        """
+        SELECT COUNT(*) FROM collision_tiles 
+        WHERE tileset_id = ? AND tile_id = ?
+        """,
+        (tileset_id, block_index),
+    )
+
+    count = cursor.fetchone()[0]
+
+    # If the block is in the collision_tiles table, it's not walkable
+    if count > 0:
+        return False
+
+    # For tilesets without specific collision data, use a reasonable default
+    # Higher block indices tend to be walls and obstacles
+    if count == 0 and block_index >= 30:
+        return False
+
+    # Default to walkable
+    return True
+
+
 def main():
     # Ensure 2bpp files exist
     ensure_2bpp_files_exist()
@@ -694,6 +853,9 @@ def main():
     # Create database
     db_conn = create_database()
     cursor = db_conn.cursor()
+
+    # Load collision data
+    load_collision_data(db_conn)
 
     # Load constants and data
     map_constants = load_map_constants()
@@ -944,11 +1106,14 @@ def main():
                 if block_pos < len(blk_bytes):
                     block_index = blk_bytes[block_pos]
 
+                    # Determine if the block is walkable using the database
+                    is_walkable = is_block_walkable(block_index, tileset_id, db_conn)
+
                     # Insert into tiles_raw table
                     cursor.execute(
                         """
-                        INSERT INTO tiles_raw (map_id, x, y, block_index, tileset_id, is_overworld)
-                        VALUES (?, ?, ?, ?, ?, ?)
+                        INSERT INTO tiles_raw (map_id, x, y, block_index, tileset_id, is_overworld, is_walkable)
+                        VALUES (?, ?, ?, ?, ?, ?, ?)
                         """,
                         (
                             map_id,
@@ -957,6 +1122,7 @@ def main():
                             block_index,
                             tileset_id,
                             1 if is_overworld else 0,
+                            1 if is_walkable else 0,
                         ),
                     )
                     tiles_raw_count += 1

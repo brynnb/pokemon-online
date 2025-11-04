@@ -53,6 +53,7 @@ def create_new_tables():
         map_id INTEGER NOT NULL,
         tile_image_id INTEGER NOT NULL,
         is_overworld INTEGER NOT NULL DEFAULT 0,
+        is_walkable INTEGER NOT NULL DEFAULT 1,
         FOREIGN KEY (map_id) REFERENCES maps (id),
         FOREIGN KEY (tile_image_id) REFERENCES tile_images (id)
     )
@@ -347,6 +348,17 @@ def populate_tiles(conn, block_pos_to_image_id):
         print("Error: tiles_raw table does not exist. Please run export_map.py first.")
         return
 
+    # Check if the collision_tiles table exists
+    cursor.execute(
+        "SELECT name FROM sqlite_master WHERE type='table' AND name='collision_tiles'"
+    )
+    has_collision_tiles = cursor.fetchone() is not None
+
+    if not has_collision_tiles:
+        print(
+            "Warning: collision_tiles table does not exist. Walkability data may be inaccurate."
+        )
+
     # Get all maps with their is_overworld flag
     cursor.execute(
         """
@@ -408,7 +420,7 @@ def populate_tiles(conn, block_pos_to_image_id):
         # Get raw tile data for this map from tiles_raw table
         cursor.execute(
             """
-        SELECT x, y, block_index, tileset_id, is_overworld
+        SELECT x, y, block_index, tileset_id, is_overworld, is_walkable
         FROM tiles_raw
         WHERE map_id = ?
         """,
@@ -424,7 +436,14 @@ def populate_tiles(conn, block_pos_to_image_id):
         map_tiles = []
 
         # Process each raw tile
-        for raw_x, raw_y, block_index, raw_tileset_id, raw_is_overworld in raw_tiles:
+        for (
+            raw_x,
+            raw_y,
+            block_index,
+            raw_tileset_id,
+            raw_is_overworld,
+            raw_is_walkable,
+        ) in raw_tiles:
             # Special case: Map DOJO (tileset ID 5) to GYM (tileset ID 7)
             # This is because in the original game, DOJO uses the same graphics as GYM
             lookup_tileset_id = 7 if raw_tileset_id == 5 else raw_tileset_id
@@ -432,6 +451,46 @@ def populate_tiles(conn, block_pos_to_image_id):
             # This is because marts and pokecenters share similar interior graphics
             if raw_tileset_id == 2:
                 lookup_tileset_id = 6
+
+            # Get the block data to check individual tiles
+            cursor.execute(
+                """
+                SELECT block_data FROM blocksets 
+                WHERE tileset_id = ? AND block_index = ?
+                """,
+                (lookup_tileset_id, block_index),
+            )
+            block_data_row = cursor.fetchone()
+
+            # If we can't find the block data, skip this block
+            if not block_data_row:
+                continue
+
+            block_data = block_data_row[0]
+
+            # Check if any of the tiles in this block are in the collision_tiles table
+            # If so, mark the entire block as non-walkable
+            is_walkable = raw_is_walkable
+
+            if has_collision_tiles:
+                # Check each tile in the block
+                for tile_pos in range(len(block_data)):
+                    tile_id = block_data[tile_pos]
+
+                    # Check if this tile is in the collision_tiles table
+                    cursor.execute(
+                        """
+                        SELECT COUNT(*) FROM collision_tiles 
+                        WHERE tileset_id = ? AND tile_id = ?
+                        """,
+                        (raw_tileset_id, tile_id),
+                    )
+                    count = cursor.fetchone()[0]
+
+                    # If any tile in the block is non-walkable, the entire block is non-walkable
+                    if count > 0:
+                        is_walkable = 0
+                        break
 
             # Each block corresponds to 4 tiles (2x2 grid)
             # We need to create 4 entries in the tiles table
@@ -467,6 +526,7 @@ def populate_tiles(conn, block_pos_to_image_id):
                         map_id,
                         tile_image_id,
                         is_overworld,
+                        is_walkable,  # Use the updated walkable value
                     )
                 )
 
@@ -481,8 +541,8 @@ def populate_tiles(conn, block_pos_to_image_id):
         if len(tiles_data) >= BATCH_SIZE:
             cursor.executemany(
                 """
-            INSERT INTO tiles (x, y, local_x, local_y, map_id, tile_image_id, is_overworld)
-            VALUES (?, ?, ?, ?, ?, ?, ?)
+            INSERT INTO tiles (x, y, local_x, local_y, map_id, tile_image_id, is_overworld, is_walkable)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
             """,
                 tiles_data,
             )
@@ -493,8 +553,8 @@ def populate_tiles(conn, block_pos_to_image_id):
     if tiles_data:
         cursor.executemany(
             """
-        INSERT INTO tiles (x, y, local_x, local_y, map_id, tile_image_id, is_overworld)
-        VALUES (?, ?, ?, ?, ?, ?, ?)
+        INSERT INTO tiles (x, y, local_x, local_y, map_id, tile_image_id, is_overworld, is_walkable)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?)
         """,
             tiles_data,
         )
